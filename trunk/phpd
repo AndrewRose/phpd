@@ -1,0 +1,154 @@
+#!/usr/bin/php
+<?php
+/* 
+  phpd Copyright (C) 2007 Andrew Rose
+  rose.andrew@gmail.com
+  http://andrewrose.co.uk
+  http://andrew-rose.blogspot.com
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
+
+define('INICONF', 'phpd.ini');
+
+set_time_limit(0);
+declare(ticks = 1);
+
+require_once('../Aplc.php');
+Aplc::setupAutoloader();
+
+class Phpd_Child extends Aplc_Daemon_Child
+{
+	public $server = "phpd/1.0";
+	public $protocol = "HTTP/1.0";
+
+	public $id;
+	public $sock;
+
+	public function start()
+	{
+		while(1)
+		{
+			$c = @socket_accept($this->sock);
+
+			$data = 'hello world! from: '.$this->id."\r\n";
+			$headers = $this->headers(200, "OK", strlen($data));
+			$response = $headers.$data;
+
+			if(@socket_write($c, $response, strlen($response)) != strlen($response))
+			{
+				echo "Failed to write response...\n";
+			}
+
+			@socket_shutdown($c, 1);
+
+			while(($buff=@socket_read($c, 1024)) !== '')
+			{
+				//echo $buff;
+			}
+
+			@socket_close($c);
+
+			if($this->shutdown)
+			{
+				return;
+			}
+		}
+	}
+
+	public function headers($status, $title, $length=0, $extra='', $mime='text/html')
+	{
+		$headers = '';
+		$headers .= $this->protocol.' '.$status.' '.$title."\r\n";
+		$headers .= 'Server: '.$this->server."\r\n";
+		$headers .= 'Date: '.date('D, d M Y H:i:s e', time())."\r\n";
+		if($extra)
+		{
+			$headers .= $extra;
+		}
+		$headers .= 'Content-Type: '.$mime."\r\n";
+		$headers .= 'Content-Length: '.$length."\r\n";
+		$headers .= 'Connection: close'."\r\n";
+		return $headers . "\r\n";
+	}
+
+	public function reload()
+	{
+	}
+
+	public function shutdown()
+	{
+	}
+}
+
+class Phpd extends Aplc_Daemon
+{
+	public $port = 80;
+	public $socket;
+
+	public function start()
+	{
+		if(!($this->socket = @socket_create_listen($this->port)))
+		{
+			exit("Failed to create socket!\n");
+		}
+
+		//socket_set_nonblock($this->socket);
+
+		$phpd = new Phpd_Child;
+		for($i=$this->reg->get('parent.fork.limit');$i;$i--)
+		{
+			$phpd->id = $i;
+			$phpd->sock = $this->socket;
+			$this->child($phpd);
+		}
+
+		unset($phpd);
+
+		while(1)
+		{
+			if($this->shutdown)
+			{
+				return TRUE;
+			}
+			sleep(1);
+		}
+	}
+
+	public function reload()
+	{
+	}
+
+	/* Because we block on the main socket we need to "poke" the child processes
+	   by creating new connections so they shutdown */
+	public function shutdown()
+	{
+		$this->shutdown = TRUE;
+
+		for($i = count($this->children); $i; $i--)
+		{
+			@fsockopen('localhost', $this->port, $errno, $errstr, 2);
+		}
+
+		$this->waitChildren();
+
+		socket_close($this->socket);
+
+		return;
+	}
+}
+
+$phpd = new phpd;
+$phpd->main();
