@@ -26,13 +26,24 @@ define('INICONF', 'phpd.ini');
 set_time_limit(0);
 declare(ticks = 1);
 
-require_once('../../Aplc.php');
+require_once('/usr/lib/aplc/Aplc.php');
 Aplc::setupAutoloader();
 
 require_once('test.php');
+require_once('modules/request.php');
+require_once('modules/session.php');
+
+
+interface Phpd_Module
+{
+	public function init(Phpd_Child $o);
+	public function deinit(Phpd_Child $o);
+}
 
 class Phpd_Child extends Aplc_Daemon_Child
 {
+	public $modules = array();
+
 	public $server = "phpd/1.0";
 	public $protocol = "HTTP/1.1";
 	public $socket;
@@ -49,41 +60,15 @@ class Phpd_Child extends Aplc_Daemon_Child
 			/* we silence this as it will fall over when we set nonblock on the sock during shutdown */
 			if(($c = @socket_accept($this->socket)) !== FALSE)
 			{
-				$request = socket_read($c, 1024000);
-				$this->dissolveRequest($request);
-				//echo $request;
-
-//				$data = '<form action="someaction.php" method="post"><input type="text" name="testvar"><input type="checkbox" name="testscheck"><input type="submit"></form>hello world! from: '.$this->pid."\r\n";
-//				$data = gzdeflate($data);
-
-				
-				/* this would be in a module/init */
-				if(isset($_COOKIE['PHPSESSID']))
-				{
-					session_id($_COOKIE['PHPSESSID']);
-				}
-				else
-				{
-					$sessid = md5(rand(1, 1000000));
-					$this->addHeader('Set-Cookie: PHPSESSID='.$sessid);
-					session_id($sessid);
-				}
-				@session_start();
-				/* */
+				$this->request = socket_read($c, 1024000);
+	
+				$this->initModules();
 
 				/* main script execution */
 				$data =	$this->class->main($this);
 				/* */
 
-				/* this belongs in a module/deinit */
-				session_write_close();
-				unset($_COOKIE);
-				/* */
-
-//				$headers = $this->headers(200, "OK", strlen($data), "Content-Encoding: deflate\r\n");
 				$headers = $this->headers(200, "OK", strlen($data));
-// messy I know
-$this->headers = array();
 
 				$response = (string)$headers.$data;
 
@@ -93,6 +78,9 @@ $this->headers = array();
 				}
 
 				socket_close($c);
+
+				$this->deinitModules();
+				$this->cleanup();
 			}
 
 			if($this->shutdown)
@@ -102,53 +90,28 @@ $this->headers = array();
 		}
 	}
 
-	/* http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html */
-	public function dissolveRequest($request)
+	public function initModules()
 	{
-		$_COOKIE = array();
-		$request = trim($request);
-		$headers = explode("\r\n", $request);
-
-		$headers = array_reverse($headers);
-		$request = array_pop($headers);
-		$parts = explode(' ', $request);
-
-		switch($parts[0])
+		foreach($this->modules as $module)
 		{
-			case 'GET':
-				$method = 'GET';
-			break;
-			case 'POST':
-				$method = 'POST';
-			break;
-			default:
-				return FALSE;
-			break;
-		}
-
-		$uri = $parts[1];
-		$version = $parts[2];		
-
-		foreach($headers as $header)
-		{
-			list($header, $value) = explode(':', $header);
-			switch(trim($header))
-			{
-				case 'Cookie':
-				{
-					$vars = explode('&', $value);
-					foreach($vars as $var)
-					{
-						list($k, $v) = explode('=', $value);
-						$_COOKIE[trim($k)] = trim($v);
-					}
-				}
-				break;
-			}
+			$module->init($this);
 		}
 	}
 
-	public function addHeader($header)
+	public function deinitModules()
+	{
+		foreach($this->modules as $module)
+		{
+			$module->deinit($this);
+		}
+	}
+
+	public function cleanup()
+	{
+		$this->headers = array();
+	}
+
+	public function header($header)
 	{
 		$this->headers[] = $header;
 	}
@@ -195,7 +158,9 @@ class Phpd extends Aplc_Daemon
 
 		if(!@socket_bind($this->socket, $this->reg->get('server.address'), $this->reg->get('server.port')))
 		{
-			exit("Unable to bind to socket!\n");
+			$error = socket_last_error($this->socket);
+			$error = socket_strerror($error);
+			exit('Unable to bind to socket: '.$error."\n");
 		}
 
 		if(!@socket_listen($this->socket, $this->reg->get('server.backLog')))
@@ -204,6 +169,9 @@ class Phpd extends Aplc_Daemon
 		}
 
 		$phpd = new Phpd_Child;
+		$phpd->modules[] = new Phpd_Module_Request;
+		$phpd->modules[] = new Phpd_Module_Session;
+
 		for($i=$this->reg->get('server.maxChildren');$i;$i--)
 		{
 			$phpd->socket = $this->socket;
