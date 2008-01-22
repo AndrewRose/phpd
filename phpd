@@ -82,6 +82,11 @@ class Phpd_Child extends Aplc_Daemon_Child
 				$this->deinitModules();
 				$this->cleanup();
 			}
+/* if we unblock the socket and sleep is this a good solution for allowing a graceful shutdown? */
+//			else
+//			{
+//				usleep(5000);
+//			}
 
 			if($this->shutdown)
 			{
