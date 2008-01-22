@@ -169,8 +169,15 @@ class Phpd extends Aplc_Daemon
 		}
 
 		$phpd = new Phpd_Child;
-		$phpd->modules[] = new Phpd_Module_Request;
-		$phpd->modules[] = new Phpd_Module_Session;
+
+		if($this->reg->exists('server.modules'))
+		{
+			foreach($this->reg->get('server.modules') as $module)
+			{
+				$class = 'Phpd_Module_'.$module;
+				$phpd->modules[] = new $class;
+			}
+		}
 
 		for($i=$this->reg->get('server.maxChildren');$i;$i--)
 		{
