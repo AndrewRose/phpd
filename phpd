@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/usr/bin/php -q
 <?php
 /* 
   phpd Copyright (C) 2007 Andrew Rose
@@ -29,42 +29,71 @@ declare(ticks = 1);
 require_once('../../Aplc.php');
 Aplc::setupAutoloader();
 
+require_once('test.php');
+
 class Phpd_Child extends Aplc_Daemon_Child
 {
 	public $server = "phpd/1.0";
-	public $protocol = "HTTP/1.0";
+	public $protocol = "HTTP/1.1";
+	public $socket;
 
-	public $id;
-	public $sock;
+	public $class = FALSE;
+	public $headers = array();
 
 	public function start()
 	{
+		$this->class = new test;
+
 		while(1)
 		{
-			$c = @socket_accept($this->sock);
-
-			$request = socket_read($c, 1024000);
-			//echo $request;
-
-			$data = '<form action="someaction.php" method="post"><input type="text" name="testvar"><input type="checkbox" name="testscheck"><input type="submit"></form>hello world! from: '.$this->id."\r\n";
-//			$data = gzdeflate($data);
-
-//			$headers = $this->headers(200, "OK", strlen($data), "Content-Encoding: deflate\r\n");
-			$headers = $this->headers(200, "OK", strlen($data));
-			$response = (string)$headers.$data;
-
-			if(@socket_write($c, $response, strlen($response)) != strlen($response))
+			/* we silence this as it will fall over when we set nonblock on the sock during shutdown */
+			if(($c = @socket_accept($this->socket)) !== FALSE)
 			{
-				echo "Failed to write response...\n";
+				$request = socket_read($c, 1024000);
+				$this->dissolveRequest($request);
+				//echo $request;
+
+//				$data = '<form action="someaction.php" method="post"><input type="text" name="testvar"><input type="checkbox" name="testscheck"><input type="submit"></form>hello world! from: '.$this->pid."\r\n";
+//				$data = gzdeflate($data);
+
+				
+				/* this would be in a module/init */
+				if(isset($_COOKIE['PHPSESSID']))
+				{
+					session_id($_COOKIE['PHPSESSID']);
+				}
+				else
+				{
+					$sessid = md5(rand(1, 1000000));
+					$this->addHeader('Set-Cookie: PHPSESSID='.$sessid);
+					session_id($sessid);
+				}
+				@session_start();
+				/* */
+
+				/* main script execution */
+				$data =	$this->class->main($this);
+				/* */
+
+				/* this belongs in a module/deinit */
+				session_write_close();
+				unset($_COOKIE);
+				/* */
+
+//				$headers = $this->headers(200, "OK", strlen($data), "Content-Encoding: deflate\r\n");
+				$headers = $this->headers(200, "OK", strlen($data));
+// messy I know
+$this->headers = array();
+
+				$response = (string)$headers.$data;
+
+				if(socket_write($c, $response, strlen($response)) != strlen($response))
+				{
+					echo "Failed to write response...\n";
+				}
+
+				socket_close($c);
 			}
-
-			@socket_shutdown($c, 1);
-
-			@socket_read($c, 1024000);
-
-			@socket_shutdown($c, 0);
-
-			@socket_close($c);
 
 			if($this->shutdown)
 			{
@@ -73,12 +102,66 @@ class Phpd_Child extends Aplc_Daemon_Child
 		}
 	}
 
+	/* http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html */
+	public function dissolveRequest($request)
+	{
+		$_COOKIE = array();
+		$request = trim($request);
+		$headers = explode("\r\n", $request);
+
+		$headers = array_reverse($headers);
+		$request = array_pop($headers);
+		$parts = explode(' ', $request);
+
+		switch($parts[0])
+		{
+			case 'GET':
+				$method = 'GET';
+			break;
+			case 'POST':
+				$method = 'POST';
+			break;
+			default:
+				return FALSE;
+			break;
+		}
+
+		$uri = $parts[1];
+		$version = $parts[2];		
+
+		foreach($headers as $header)
+		{
+			list($header, $value) = explode(':', $header);
+			switch(trim($header))
+			{
+				case 'Cookie':
+				{
+					$vars = explode('&', $value);
+					foreach($vars as $var)
+					{
+						list($k, $v) = explode('=', $value);
+						$_COOKIE[trim($k)] = trim($v);
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	public function addHeader($header)
+	{
+		$this->headers[] = $header;
+	}
+
 	public function headers($status, $title, $length=0, $extra='', $mime='text/html')
 	{
-		$headers = '';
-		$headers .= $this->protocol.' '.$status.' '.$title."\r\n";
+		$headers = $this->protocol.' '.$status.' '.$title."\r\n";
 		$headers .= 'Server: '.$this->server."\r\n";
 		$headers .= 'Date: '.date('D, d M Y H:i:s e', time())."\r\n";
+		foreach($this->headers as $header)
+		{
+			$headers .= $header."\r\n";
+		}
 		if($extra)
 		{
 			$headers .= $extra;
@@ -91,6 +174,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function reload()
 	{
+		$this->class = new test;
 	}
 
 	public function shutdown()
@@ -100,23 +184,29 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 class Phpd extends Aplc_Daemon
 {
-	public $port = 80;
 	public $socket;
 
 	public function start()
 	{
-		if(!($this->socket = @socket_create_listen($this->port)))
+		if(!($this->socket = @socket_create(AF_INET, SOCK_STREAM, 0)))
 		{
 			exit("Failed to create socket!\n");
 		}
 
-		//socket_set_nonblock($this->socket);
+		if(!@socket_bind($this->socket, $this->reg->get('server.address'), $this->reg->get('server.port')))
+		{
+			exit("Unable to bind to socket!\n");
+		}
+
+		if(!@socket_listen($this->socket, $this->reg->get('server.backLog')))
+		{
+			exit("Unable to listen on socket!\n");
+		}
 
 		$phpd = new Phpd_Child;
-		for($i=$this->reg->get('parent.fork.limit');$i;$i--)
+		for($i=$this->reg->get('server.maxChildren');$i;$i--)
 		{
-			$phpd->id = $i;
-			$phpd->sock = $this->socket;
+			$phpd->socket = $this->socket;
 			$this->child($phpd);
 		}
 
@@ -142,10 +232,11 @@ class Phpd extends Aplc_Daemon
 	{
 		$this->shutdown = TRUE;
 
-		for($i = count($this->children); $i; $i--)
-		{
-			@fsockopen('localhost', $this->port, $errno, $errstr, 2);
-		}
+		socket_set_nonblock($this->socket);
+
+		/* really shouldn't need to do this but some wierd bug requires it.. */
+		sleep(1);
+		@fsockopen($this->address, $this->port, $errno, $errstr, 2);
 
 		$this->waitChildren();
 
