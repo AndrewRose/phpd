@@ -26,17 +26,27 @@ define('INICONF', 'phpd.ini');
 set_time_limit(0);
 declare(ticks = 1);
 
-require_once('/usr/lib/aplc/Aplc.php');
+//require_once('/usr/lib/aplc/Aplc.php');
+require_once('../../Aplc.php');
 Aplc::setupAutoloader();
 
-require_once('test.php');
 require_once('modules/request.php');
+require_once('modules/database.php');
 require_once('modules/session.php');
 
+interface Phpd_Application
+{
+	public function init(Phpd_Child $o);
+	public function request(Phpd_Child $o);
+	public function cleanup(Phpd_Child $o);
+	public function deinit(Phpd_Child $o);
+}
 
 interface Phpd_Module
 {
 	public function init(Phpd_Child $o);
+	public function request(Phpd_Child $o);
+	public function cleanup(Phpd_Child $o);
 	public function deinit(Phpd_Child $o);
 }
 
@@ -48,12 +58,14 @@ class Phpd_Child extends Aplc_Daemon_Child
 	public $protocol = "HTTP/1.1";
 	public $socket;
 
+	public $application = '';
 	public $class = FALSE;
 	public $headers = array();
 
 	public function start()
 	{
-		$this->class = new test;
+		$this->initModules();
+		$this->application->init($this);
 
 		while(1)
 		{
@@ -62,10 +74,10 @@ class Phpd_Child extends Aplc_Daemon_Child
 			{
 				$this->request = socket_read($c, 1024000);
 	
-				$this->initModules();
+				$this->requestModules();
 
-				/* main script execution */
-				$data =	$this->class->main($this);
+				/* main application entry point */
+				$data = $this->application->request($this);
 				/* */
 
 				$headers = $this->headers(200, "OK", strlen($data));
@@ -79,14 +91,14 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 				socket_close($c);
 
-				$this->deinitModules();
+				$this->application->cleanup($this);
+				$this->cleanupModules();
 				$this->cleanup();
 			}
-/* if we unblock the socket and sleep is this a good solution for allowing a graceful shutdown? */
-//			else
-//			{
-//				usleep(5000);
-//			}
+			else
+			{
+				usleep(5000);
+			}
 
 			if($this->shutdown)
 			{
@@ -100,6 +112,22 @@ class Phpd_Child extends Aplc_Daemon_Child
 		foreach($this->modules as $module)
 		{
 			$module->init($this);
+		}
+	}
+
+	public function requestModules()
+	{
+		foreach($this->modules as $module)
+		{
+			$module->request($this);
+		}
+	}
+
+	public function cleanupModules()
+	{
+		foreach($this->modules as $module)
+		{
+			$module->cleanup($this);
 		}
 	}
 
@@ -147,6 +175,8 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
+		$this->application->deinit($this);
+		$this->deinitModules();
 	}
 }
 
@@ -156,6 +186,22 @@ class Phpd extends Aplc_Daemon
 
 	public function start()
 	{
+		if(!$this->reg->exists('application.name'))
+		{
+			exit("Unable to determine application!\n");
+		}
+
+		if(!file_exists($this->reg->get('application.name').'/entrypoint.php'))
+		{
+			exit("Unable to locate application entrypoint.\n");
+		}
+		else
+		{
+			$class = $this->reg->get('application.name');
+			require_once($this->reg->get('application.name').'/entrypoint.php');
+			$application = new $class;
+		}
+
 		if(!($this->socket = @socket_create(AF_INET, SOCK_STREAM, 0)))
 		{
 			exit("Failed to create socket!\n");
@@ -173,7 +219,11 @@ class Phpd extends Aplc_Daemon
 			exit("Unable to listen on socket!\n");
 		}
 
+		/* if only we could catch a signal when a socket did block... */
+		socket_set_nonblock($this->socket);
+
 		$phpd = new Phpd_Child;
+		$phpd->application = $application;
 
 		if($this->reg->exists('server.modules'))
 		{
@@ -191,6 +241,7 @@ class Phpd extends Aplc_Daemon
 		}
 
 		unset($phpd);
+		unset($application);
 
 		while(1)
 		{
@@ -206,23 +257,10 @@ class Phpd extends Aplc_Daemon
 	{
 	}
 
-	/* Because we block on the main socket we need to "poke" the child processes
-	   by creating new connections so they shutdown */
 	public function shutdown()
 	{
-		$this->shutdown = TRUE;
-
-		socket_set_nonblock($this->socket);
-
-		/* really shouldn't need to do this but some wierd bug requires it.. */
-		sleep(1);
-		@fsockopen($this->address, $this->port, $errno, $errstr, 2);
-
 		$this->waitChildren();
-
 		socket_close($this->socket);
-
-		return;
 	}
 }
 

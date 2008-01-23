@@ -4,18 +4,29 @@ class Phpd_Module_Request implements Phpd_Module
 {
 	public function init(Phpd_Child $o)
 	{
+	}
+
+	public function request(Phpd_Child $o)
+	{
 		$this->dissolveRequest($o->request);
+	}
+
+	public function cleanup(Phpd_Child $o)
+	{
+		$o->request = FALSE; 
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
-		$o->request = FALSE; 
 	}
 
         /* http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html */
         public function dissolveRequest($request)
         {
                 $_COOKIE = array();
+		$_POST = array();
+		$_GET = array();
+
                 $request = trim($request);
                 $headers = explode("\r\n", $request);
 
