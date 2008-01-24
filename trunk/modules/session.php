@@ -2,27 +2,27 @@
 
 class Phpd_Module_Session implements Phpd_Module
 {
+	private $session;
+
 	public function init(Phpd_Child $o)
 	{
+		if(!$o->reg->exists('_phpd.module.Session.database') || !$o->reg->exists('_phpd.module.Database.'.$o->reg->get('_phpd.module.Session.database')))
+		{
+			throw new Aplc_Exception_Session('Unable to start session module to incorrect or missing registry entries');
+		}
+		$this->session = new Aplc_Session_Db;
+		$this->session->init($o->reg->getReference('_phpd.module.Database.'.$o->reg->get('_phpd.module.Session.database')));
 	}
 
 	public function request(Phpd_Child $o)
 	{
-		/* this block should be in init.. but theres some wierd bug that causes it to fail */
-		if($o->reg->exists('session.database') && $o->reg->exists('database.'.$o->reg->get('session.database')))
+		$this->session->setHandlers();
+		if(!$o->reg->exists('_phpd.module.Session.name'))
 		{
-			$session = new Aplc_Session_Db;
-			$session->init($o->reg->getReference('database.'.$o->reg->get('session.database')));
-			$session->setHandlers();
-		}
-		/* */
-
-		if(!$o->reg->exists('session.name'))
-		{
-			$o->reg->set('session.name', 'PHPDSESSID');
+			$o->reg->set('_phpd.module.Session.name', 'PHPDSESSID');
 		}
 
-		$sessionId = $o->reg->get('session.name');
+		$sessionId = $o->reg->get('_phpd.module.Session.name');
 		if(isset($_COOKIE[$sessionId]))
 		{
 			session_id($_COOKIE[$sessionId]);
@@ -39,6 +39,7 @@ class Phpd_Module_Session implements Phpd_Module
 	public function cleanup(Phpd_Child $o)
 	{
 		session_write_close();
+		//session_destroy();
 		unset($_SESSION);
 	}
 

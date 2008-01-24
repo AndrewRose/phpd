@@ -2,7 +2,7 @@
 
 class test implements Phpd_Application
 {
-	public static $counter = 0;
+	public $counter = 0;
 	public $dbconn;
 
         public function init(Phpd_Child $o)
