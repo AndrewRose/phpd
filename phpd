@@ -33,6 +33,8 @@ Aplc::setupAutoloader();
 require_once('modules/request.php');
 require_once('modules/database.php');
 require_once('modules/session.php');
+require_once('modules/killer.php');
+require_once('modules/compression.php');
 
 interface Phpd_Application
 {
@@ -52,15 +54,13 @@ interface Phpd_Module
 
 class Phpd_Child extends Aplc_Daemon_Child
 {
-	public $modules = array();
-
 	public $server = "phpd/1.0";
 	public $protocol = "HTTP/1.1";
 	public $socket;
-
-	public $application = '';
-	public $class = FALSE;
 	public $headers = array();
+	public $modules = array();
+	public $data = '';
+	public $application = FALSE;
 
 	public function start()
 	{
@@ -77,12 +77,14 @@ class Phpd_Child extends Aplc_Daemon_Child
 				$this->requestModules();
 
 				/* main application entry point */
-				$data = $this->application->request($this);
+				$this->data = $this->application->request($this);
 				/* */
 
-				$headers = $this->headers(200, "OK", strlen($data));
+				$this->data = substr($this->data, 1, 150);
 
-				$response = (string)$headers.$data;
+				$headers = $this->headers(200, "OK", strlen($this->data));
+
+				$response = (string)$headers.$this->data;
 
 				if(socket_write($c, $response, strlen($response)) != strlen($response))
 				{
@@ -97,7 +99,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 			}
 			else
 			{
-				usleep(5000);
+				usleep(10000);
 			}
 
 			if($this->shutdown)
@@ -109,9 +111,24 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function initModules()
 	{
-		foreach($this->modules as $module)
+		try
 		{
-			$module->init($this);
+			foreach($this->modules as $module)
+			{
+				$module->init($this);
+			}
+		}
+		catch(Aplc_Exception $e)
+		{
+			echo $e->getMessage();
+			while(1)
+			{
+				if($this->shutdown)
+				{
+					return;
+				}
+				usleep(10000);
+			}
 		}
 	}
 
@@ -170,7 +187,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function reload()
 	{
-		$this->class = new test;
+		$this->initRegistry();
 	}
 
 	public function shutdown()
@@ -186,19 +203,19 @@ class Phpd extends Aplc_Daemon
 
 	public function start()
 	{
-		if(!$this->reg->exists('application.name'))
+		if(!$this->reg->exists('_phpd.application'))
 		{
 			exit("Unable to determine application!\n");
 		}
 
-		if(!file_exists($this->reg->get('application.name').'/entrypoint.php'))
+		if(!file_exists($this->reg->get('_phpd.application').'/entrypoint.php'))
 		{
 			exit("Unable to locate application entrypoint.\n");
 		}
 		else
 		{
-			$class = $this->reg->get('application.name');
-			require_once($this->reg->get('application.name').'/entrypoint.php');
+			$class = $this->reg->get('_phpd.application');
+			require_once($class.'/entrypoint.php');
 			$application = new $class;
 		}
 
@@ -207,14 +224,14 @@ class Phpd extends Aplc_Daemon
 			exit("Failed to create socket!\n");
 		}
 
-		if(!@socket_bind($this->socket, $this->reg->get('server.address'), $this->reg->get('server.port')))
+		if(!@socket_bind($this->socket, $this->reg->get('_phpd.address'), $this->reg->get('_phpd.port')))
 		{
 			$error = socket_last_error($this->socket);
 			$error = socket_strerror($error);
 			exit('Unable to bind to socket: '.$error."\n");
 		}
 
-		if(!@socket_listen($this->socket, $this->reg->get('server.backLog')))
+		if(!@socket_listen($this->socket, $this->reg->get('_phpd.backLog')))
 		{
 			exit("Unable to listen on socket!\n");
 		}
@@ -224,24 +241,19 @@ class Phpd extends Aplc_Daemon
 
 		$phpd = new Phpd_Child;
 		$phpd->application = $application;
+		$phpd->socket = $this->socket;
 
-		if($this->reg->exists('server.modules'))
+		if($this->reg->exists('_phpd.moduleLocation,_phpd.module'))
 		{
-			foreach($this->reg->get('server.modules') as $module)
+			foreach($this->reg->get('_phpd.module') as $module => $discard)
 			{
 				$class = 'Phpd_Module_'.$module;
 				$phpd->modules[] = new $class;
 			}
 		}
 
-		for($i=$this->reg->get('server.maxChildren');$i;$i--)
-		{
-			$phpd->socket = $this->socket;
-			$this->child($phpd);
-		}
-
-		unset($phpd);
-		unset($application);
+		$this->initLog();
+		$this->childRespawn = TRUE;
 
 		while(1)
 		{
@@ -249,12 +261,17 @@ class Phpd extends Aplc_Daemon
 			{
 				return TRUE;
 			}
-			sleep(1);
+			$this->child($phpd);
 		}
+
+		unset($phpd);
+		unset($application);
+
 	}
 
 	public function reload()
 	{
+		$this->initRegistry();
 	}
 
 	public function shutdown()

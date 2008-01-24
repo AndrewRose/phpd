@@ -4,16 +4,23 @@
 
 class Phpd_Module_Database implements Phpd_Module
 {
+	private $dbs = array();
+
 	public function init(Phpd_Child $o)
 	{
-		if($o->reg->exists('database'))
+		if($o->reg->exists('_phpd.module.Database'))
 		{
-			foreach($o->reg->get('database') as $database => $discard)
+			foreach($o->reg->get('_phpd.module.Database') as $database => $discard)
 			{
 				$db = new Aplc_Db;
-				$db->init($o->reg->getReference('database.'.$database));
-				$o->reg->set('database.'.$database.'.instance', $db);
+				$db->init($o->reg->getReference('_phpd.module.Database.'.$database));
+				$this->dbs[] = $db; // save reference to making deinits life easier
+				$o->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
 			}
+		}
+		else
+		{
+			// log wasted cpu time
 		}
 	}
 
@@ -27,15 +34,9 @@ class Phpd_Module_Database implements Phpd_Module
 
 	public function deinit(Phpd_Child $o)
 	{
-		if($o->reg->exists('database'))
+		foreach($this->dbs as $db)
 		{
-			foreach($o->reg->get('database') as $database => $discard)
-			{
-				if($o->reg->exists('database.'.$database.'.instance'))
-				{
-					$o->reg->get('database.'.$database.'.instance')->close();
-				}
-			}
+			$db->close();
 		}
 	}
 }
