@@ -33,7 +33,7 @@ class Phpd_Module_Session implements Phpd_Module
 			$o->header('Set-Cookie: '.$sessionId.'='.$id);
 			session_id($id);
 		}
-		session_start();
+		@session_start();
 	}
 
 	public function cleanup(Phpd_Child $o)

@@ -80,10 +80,17 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 		while(1)
 		{
-			/* we silence this as it will fall over when we set nonblock on the sock during shutdown */
-			if(($c = @socket_accept($this->socket)) !== FALSE)
+			if(($c = @stream_socket_accept($this->socket)) !== FALSE)
 			{
-				$this->request = socket_read($c, 1024000);
+				if($this->reg->true('_phpd.ssl.on'))
+				{
+					if(!stream_socket_enable_crypto($c, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER))
+					{
+						continue;
+					}
+				}
+
+				$this->request = fread($c, 1024000);
 
 				$this->requestModules();
 
@@ -97,12 +104,12 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 				$response = (string)$headers.$this->data;
 
-				if(socket_write($c, $response, strlen($response)) != strlen($response))
+				if(!fwrite($c, $response))
 				{
 					echo "Failed to write response...\n";
 				}
 
-				socket_close($c);
+				stream_socket_shutdown($c, STREAM_SHUT_RDWR);
 
 				$this->application->cleanup($this);
 				$this->cleanupModules();
@@ -230,25 +237,29 @@ class Phpd extends Aplc_Daemon
 			$application = new $class;
 		}
 
-		if(!($this->socket = @socket_create(AF_INET, SOCK_STREAM, 0)))
+		$context = stream_context_create();
+
+		if($this->reg->true('_phpd.ssl.on'))
 		{
-			exit("Failed to create socket!\n");
+			stream_context_set_option($context, 'ssl', 'local_cert',$this->reg->get('_phpd.ssl.local_cert'));
+			stream_context_set_option($context, 'ssl', 'passphrase', $this->reg->get('_phpd.ssl.passphrase'));
+
+			if($this->reg->true('_phpd.ssl.allow_self_signed'))
+			{
+				stream_context_set_option($context, 'ssl', 'allow_self_signed', true);
+			}
+			if($this->reg->true('_phpd.ssl.verify_peer'))
+			{
+				stream_context_set_option($context, 'ssl', 'verify_peer', true);
+			}
+
+			$this->reg->set('_phpd.port', $this->reg->getOrSet('_phpd.ssl.port', '_phpd.port')); 
 		}
 
-		if(!@socket_bind($this->socket, $this->reg->get('_phpd.address'), $this->reg->get('_phpd.port')))
-		{
-			$error = socket_last_error($this->socket);
-			$error = socket_strerror($error);
-			exit('Unable to bind to socket: '.$error."\n");
-		}
-
-		if(!@socket_listen($this->socket, $this->reg->get('_phpd.backLog')))
-		{
-			exit("Unable to listen on socket!\n");
-		}
+		$this->socket = stream_socket_server('tcp://'.$this->reg->get('_phpd.address').':'.$this->reg->get('_phpd.port'), $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN, $context);
 
 		/* if only we could catch a signal when a socket did block... */
-		socket_set_nonblock($this->socket);
+		stream_set_blocking($this->socket, 0);
 
 		$phpd = new Phpd_Child;
 		$phpd->application = $application;
@@ -291,7 +302,7 @@ class Phpd extends Aplc_Daemon
 	public function shutdown()
 	{
 		$this->waitChildren();
-		socket_close($this->socket);
+		stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 	}
 }
 
