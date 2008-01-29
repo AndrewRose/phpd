@@ -11,6 +11,10 @@ class Phpd_Module_Request implements Phpd_Module
 		$this->dissolveRequest($o->request);
 	}
 
+	public function response(Phpd_Child $o)
+	{
+	}
+
 	public function cleanup(Phpd_Child $o)
 	{
 		$o->request = FALSE; 

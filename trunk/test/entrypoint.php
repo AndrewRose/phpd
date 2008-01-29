@@ -11,7 +11,7 @@ class test implements Phpd_Application
 		//mysql_select_db('iris', $this->dbcon);
 	}
 
-        public function request(Phpd_Child $o)
+        public function response(Phpd_Child $o)
 	{
                 $this->counter++;
                 if(!isset($_SESSION['somevar'])) $_SESSION['somevar'] = rand(0, 1000000);

@@ -13,6 +13,10 @@ class Phpd_Module_Compression implements Phpd_Module
 		$o->data = gzdeflate($o->data);
 	}
 
+	public function response(Phpd_Child $o)
+	{
+	}
+
 	public function cleanup(Phpd_Child $o)
 	{
 	}

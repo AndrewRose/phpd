@@ -36,6 +36,10 @@ class Phpd_Module_Session implements Phpd_Module
 		@session_start();
 	}
 
+	public function response(Phpd_Child $o)
+	{
+	}
+
 	public function cleanup(Phpd_Child $o)
 	{
 		session_write_close();
