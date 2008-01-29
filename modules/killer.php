@@ -30,6 +30,10 @@ class Phpd_Module_Killer implements Phpd_Module
 		}
 	}
 
+	public function response(Phpd_Child $o)
+	{
+	}
+
 	public function cleanup(Phpd_Child $o)
 	{
 	}
