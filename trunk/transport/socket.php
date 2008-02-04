@@ -46,6 +46,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		}
 
 		socket_set_block($this->socket);
+
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)

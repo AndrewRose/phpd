@@ -31,6 +31,7 @@ class Phpd_Module_Killer implements Phpd_Module
 
 	public function request(Phpd_Child $o)
 	{
+		set_time_limit($o->reg->get('_phpd.module.Killer.timeout'));
 	}
 
 	public function response(Phpd_Child $o)
@@ -39,6 +40,8 @@ class Phpd_Module_Killer implements Phpd_Module
 
 	public function cleanup(Phpd_Child $o)
 	{
+		set_time_limit(0);
+
 		if($o->reg->exists('_phpd.module.Killer.requests'))
 		{
 			if($this->calls >= $o->reg->get('_phpd.module.Killer.requests'))
