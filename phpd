@@ -1,7 +1,7 @@
 #!/usr/bin/php -q
 <?php
 /* 
-  phpd Copyright (C) 2007 Andrew Rose
+  phpd Copyright (C) 2007, 2008 Andrew Rose
   rose.andrew@gmail.com
   http://andrewrose.co.uk
   http://andrew-rose.blogspot.com
@@ -26,26 +26,12 @@ define('INICONF', 'phpd.ini');
 set_time_limit(0);
 declare(ticks = 1);
 
+require_once('transport/stream.php');
+require_once('transport/socket.php');
+
 //require_once('/usr/lib/aplc/Aplc.php');
 require_once('../../Aplc.php');
 Aplc::setupAutoloader();
-
-interface Phpd_Application
-{
-	public function init(Phpd_Child $o);
-	public function response(Phpd_Child $o);
-	public function cleanup(Phpd_Child $o);
-	public function deinit(Phpd_Child $o);
-}
-
-interface Phpd_Module
-{
-	public function init(Phpd_Child $o);
-	public function request(Phpd_Child $o);
-	public function response(Phpd_Child $o);
-	public function cleanup(Phpd_Child $o);
-	public function deinit(Phpd_Child $o);
-}
 
 class Phpd_Autoloader implements Aplc_Autoloader
 {
@@ -64,74 +50,80 @@ class Phpd_Autoloader implements Aplc_Autoloader
 	}
 }
 
+interface Phpd_Application
+{
+	public function init(Phpd_Child $o);
+	public function response(Phpd_Child $o);
+	public function cleanup(Phpd_Child $o);
+	public function deinit(Phpd_Child $o);
+}
+
+interface Phpd_Module
+{
+	public function init(Phpd_Child $o);
+	public function request(Phpd_Child $o);
+	public function response(Phpd_Child $o);
+	public function cleanup(Phpd_Child $o);
+	public function deinit(Phpd_Child $o);
+}
+
+interface Phpd_Transport
+{
+	public function init(Phpd $o);
+	public function request(Phpd_Child $o);
+	public function response(Phpd_Child $o);
+	public function deinit(Phpd $o);
+}
+
 class Phpd_Child extends Aplc_Daemon_Child
 {
 	public $server = "phpd/1.0";
 	public $protocol = "HTTP/1.1";
-	public $socket;
+	public $transport;
+	public $response;
 	public $headers = array();
 	public $modules = array();
 	public $data = '';
 	public $application = FALSE;
+	public $applications = array();
 
 	public function start()
 	{
-		$this->initModules();
+		pcntl_signal(SIGALRM, array(&$this, "sigAlarm"));
+		pcntl_alarm(1);
+
+		$this->pokeModules('init');
 		$this->application->init($this);
 
 		while(1)
 		{
-			if(($c = @stream_socket_accept($this->socket)) !== FALSE)
+			if($this->transport->request($this))
 			{
-				if($this->reg->true('_phpd.ssl.on'))
-				{
-
-/*
-This blocking around the crypto enabler is to solve this bug (man it's a nasty fix, which only IE seems to cause):
-Warning: fwrite(): SSL operation failed with code 1. OpenSSL Error messages:
-error:140D00CF:SSL routines:func(208):reason(207) in /home/httpd/html/aplc/aplc-libs/Aplc/phpd/phpd on line 107
-
-Update.. the blocking actions seem to break ssl for firefox :/ ug
-
-*/
-//stream_set_blocking($c, TRUE);
-					if(stream_socket_enable_crypto($c, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) === FALSE)
-					{
-						continue;
-					}
-//stream_set_blocking($c, FALSE);
-				}
-
-				$this->request = fread($c, $this->reg->get('_phpd.requestLimit'));
-
-				$this->requestModules();
+				$this->pokeModules('request');
 
 				/* main application entry point */
 				$this->data = $this->application->response($this);
 				/* */
 
-				$this->responseModules();
+				$this->pokeModules('response');
 
+				//this is for ab as it does not account for dynamic data (and you will get length errors), afaik.
 				//$this->data = substr($this->data, 1, 150);
 
 				$headers = $this->headers(200, "OK", strlen($this->data));
 
-				$response = (string)$headers.$this->data;
+				$this->response = (string)$headers.$this->data;
 
-				if(@fwrite($c, $response) == FALSE)
+				$this->transport->response($this);
+
+				$this->application->cleanup($this); // application cleanup
+				$this->pokeModules('cleanup'); // module cleanup
+				$this->cleanup(); // phpd cleanup
+
+				if($this->shutdown)
 				{
-					$this->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
+					return;
 				}
-
-				stream_socket_shutdown($c, STREAM_SHUT_RDWR);
-
-				$this->application->cleanup($this);
-				$this->cleanupModules();
-				$this->cleanup();
-			}
-			else
-			{
-				usleep($this->reg->getOrSet('_phpd.eventLoopDelay', FALSE, 500000));
 			}
 
 			if($this->shutdown)
@@ -141,13 +133,13 @@ Update.. the blocking actions seem to break ssl for firefox :/ ug
 		}
 	}
 
-	public function initModules()
+	public function pokeModules($action)
 	{
 		try
 		{
 			foreach($this->modules as $module)
 			{
-				$module->init($this);
+				$module->$action($this);
 			}
 		}
 		catch(Aplc_Exception $e)
@@ -164,38 +156,6 @@ Update.. the blocking actions seem to break ssl for firefox :/ ug
 		}
 	}
 
-	public function requestModules()
-	{
-		foreach($this->modules as $module)
-		{
-			$module->request($this);
-		}
-	}
-
-	public function responseModules()
-	{
-		foreach($this->modules as $module)
-		{
-			$module->response($this);
-		}
-	}
-
-	public function cleanupModules()
-	{
-		foreach($this->modules as $module)
-		{
-			$module->cleanup($this);
-		}
-	}
-
-	public function deinitModules()
-	{
-		foreach($this->modules as $module)
-		{
-			$module->deinit($this);
-		}
-	}
-
 	public function cleanup()
 	{
 		$this->headers = array();
@@ -206,7 +166,7 @@ Update.. the blocking actions seem to break ssl for firefox :/ ug
 		$this->headers[] = $header;
 	}
 
-	public function headers($status, $title, $length=0, $extra='', $mime='text/html')
+	public function headers($status, $title, $length=0, $mime='text/html')
 	{
 		$headers = $this->protocol.' '.$status.' '.$title."\r\n";
 		$headers .= 'Server: '.$this->server."\r\n";
@@ -214,10 +174,6 @@ Update.. the blocking actions seem to break ssl for firefox :/ ug
 		foreach($this->headers as $header)
 		{
 			$headers .= $header."\r\n";
-		}
-		if($extra)
-		{
-			$headers .= $extra;
 		}
 		$headers .= 'Content-Type: '.$mime."\r\n";
 		$headers .= 'Content-Length: '.$length."\r\n";
@@ -233,16 +189,31 @@ Update.. the blocking actions seem to break ssl for firefox :/ ug
 	public function shutdown()
 	{
 		$this->application->deinit($this);
-		$this->deinitModules();
+		$this->pokeModules('deinit');
+	}
+
+	public function sigAlarm()
+	{
+		pcntl_alarm(1);
 	}
 }
 
 class Phpd extends Aplc_Daemon
 {
-	public $socket;
+	public $transport;
 
 	public function start()
 	{
+		if(!$this->reg->exists('_phpd.transport'))
+		{
+			exit("Unable to determine transport!\n");
+		}
+		else
+		{
+			$class = 'Phpd_Transport_'.$this->reg->get('_phpd.transport');
+			$this->transport = new $class;
+		}
+
 		if(!$this->reg->exists('_phpd.application'))
 		{
 			exit("Unable to determine application!\n");
@@ -262,43 +233,14 @@ class Phpd extends Aplc_Daemon
 		$this->initLog();
 		$this->childRespawn = TRUE;
 
-		$context = stream_context_create();
-
-		if($this->reg->true('_phpd.ssl.on'))
+		if(!$this->transport->init($this))
 		{
-			stream_context_set_option($context, 'ssl', 'local_cert',$this->reg->get('_phpd.ssl.local_cert'));
-			stream_context_set_option($context, 'ssl', 'passphrase', $this->reg->get('_phpd.ssl.passphrase'));
-
-			if($this->reg->true('_phpd.ssl.allow_self_signed'))
-			{
-				stream_context_set_option($context, 'ssl', 'allow_self_signed', true);
-			}
-			if($this->reg->true('_phpd.ssl.verify_peer'))
-			{
-				stream_context_set_option($context, 'ssl', 'verify_peer', true);
-			}
-
-			$this->reg->set('_phpd.port', $this->reg->getOrSet('_phpd.ssl.port', '_phpd.port')); 
+			exit("Unable to start socket server\n");
 		}
-
-		$this->socket = stream_socket_server('tcp://'.$this->reg->get('_phpd.address').':'.$this->reg->get('_phpd.port'), $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN, $context);
-
-/* would be great if this worked.. maybe we wouldn't lag so much on the per connection basis
-		stream_set_blocking($this->socket, 1);
-		if($this->reg->true('_phpd.ssl.on'))
-		{
-			if(stream_socket_enable_crypto($this->socket, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) == FALSE)
-			{
-				$this->log->write('Failed to enable cryto for SSL session.');
-			}
-		}
-*/
-		/* if only we could catch a signal when a socket did block... */
-		stream_set_blocking($this->socket, 0);
 
 		$phpd = new Phpd_Child;
 		$phpd->application = $application;
-		$phpd->socket = $this->socket;
+		$phpd->transport = $this->transport;
 
 		if($this->reg->exists('_phpd.moduleLocation,_phpd.module'))
 		{
@@ -323,7 +265,6 @@ class Phpd extends Aplc_Daemon
 
 		unset($phpd);
 		unset($application);
-
 	}
 
 	public function reload()
@@ -334,7 +275,7 @@ class Phpd extends Aplc_Daemon
 	public function shutdown()
 	{
 		$this->waitChildren();
-		stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
+		$this->transport->deinit($this);
 	}
 }
 
