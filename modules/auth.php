@@ -24,21 +24,26 @@ class Phpd_Module_Auth implements Phpd_Module
 {
         public function init(Phpd_Child $o)
         {
+		return TRUE;
         }
 
         public function request(Phpd_Child $o)
         {
+		return TRUE;
         }
 
 	public function response(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
         public function cleanup(Phpd_Child $o)
         {
+		return TRUE;
         }
 
         public function deinit(Phpd_Child $o)
         {
+		return TRUE;
         }
 }

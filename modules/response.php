@@ -20,25 +20,77 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+interface Phpd_Application
+{
+        public function init(Phpd_Child $o);
+	public function request(Phpd_Child $o);
+        public function response(Phpd_Child $o);
+        public function cleanup(Phpd_Child $o);
+        public function deinit(Phpd_Child $o);
+}
+
 class Phpd_Module_Response implements Phpd_Module
 {
+	private $application=FALSE;
+
 	public function init(Phpd_Child $o)
 	{
+		if($o->reg->exists('_phpd.module.Response.applicationRoot,_phpd.module.Response.defaultApplication'))
+		{
+			$application = $o->reg->get('_phpd.module.Response.defaultApplication');
+			$entryPoint = $o->reg->get('_phpd.module.Response.applicationRoot').$application.'/entrypoint.php';
+			if(is_file($entryPoint))
+			{
+				require_once($entryPoint);
+				$this->application = new $application;
+				if($this->application instanceof Phpd_Application)
+				{
+					$this->application->init($o);
+					return TRUE;
+				}
+			}
+		}
+		return FALSE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
+		if($this->application)
+		{
+			$this->application->request($o);
+			return TRUE;
+		}
+		return FALSE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
+		if($this->application)
+		{
+			$this->application->response($o);
+			return TRUE;
+		}
+		return FALSE;
 	}
 
 	public function cleanup(Phpd_Child $o)
 	{
+		if($this->application)
+		{
+			$this->application->cleanup($o);
+			return TRUE;
+		}
+		return FALSE;
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
+		if($this->application)
+		{
+			$this->application->deinit($o);
+			unset($this->application);
+			return TRUE;
+		}
+		return FALSE;
 	}
 }

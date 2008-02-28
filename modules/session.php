@@ -27,6 +27,7 @@ PHP bug #32330 means we have to reset the handles on every request.  However we 
 class Phpd_Module_Session implements Phpd_Module
 {
 	private $session;
+	private $sessionId = 'PHPDSESSID';
 
 	public function init(Phpd_Child $o)
 	{
@@ -34,35 +35,46 @@ class Phpd_Module_Session implements Phpd_Module
 		{
 			throw new Aplc_Exception_Session('Unable to start session module due to incorrect or missing registry entries');
 		}
+
 		$this->session = new Aplc_Session_Db;
+
+		if($o->reg->exists('_phpd.module.Session.name'))
+		{
+			$this->sessionId = $o->reg->get('_phpd.module.Session.name');
+		}
+
 		$this->session->init($o->reg->getReference('_phpd.module.Session.database'));
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
 		$this->session->setHandlers();
-		if(!$o->reg->exists('_phpd.module.Session.name'))
-		{
-			$o->reg->set('_phpd.module.Session.name', 'PHPDSESSID');
-		}
 
-		$sessionId = $o->reg->get('_phpd.module.Session.name');
-		if(isset($_COOKIE[$sessionId]))
+		if(isset($_COOKIE[$this->sessionId]))
 		{
-			session_id($_COOKIE[$sessionId]);
+			session_id($_COOKIE[$this->sessionId]);
 		}
 		else
 		{
-			// Yes, I know.
-			$id = md5(rand(1, 1000000));
-			$o->header('Set-Cookie: '.$sessionId.'='.$id);
-			session_id($id);
+			if(($id = $this->session->genId()))
+			{
+				$o->header('Set-Cookie: '.$this->sessionId.'='.$id);
+				session_id($id);
+			}
+			else
+			{
+				return FALSE;
+			}
 		}
+
 		@session_start();
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
@@ -70,9 +82,11 @@ class Phpd_Module_Session implements Phpd_Module
 		session_write_close();
 		//session_destroy();
 		unset($_SESSION);
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 }

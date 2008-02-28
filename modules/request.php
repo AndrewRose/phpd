@@ -24,24 +24,29 @@ class Phpd_Module_Request implements Phpd_Module
 {
 	public function init(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
 		$this->dissolveRequest($o->request);
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
 	{
 		$o->request = FALSE; 
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
         /* http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html */
@@ -91,6 +96,7 @@ class Phpd_Module_Request implements Phpd_Module
                                 break;
                         }
                 }
+		return TRUE;
         }
 
 }

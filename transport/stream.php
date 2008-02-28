@@ -58,16 +58,15 @@ class Phpd_Transport_Stream implements Phpd_Transport
 
 	public function request(Phpd_Child $o)
 	{
-		if($o->reg->true('_phpd.ssl.on'))
-		{
-			if(stream_socket_enable_crypto($this->client, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) === FALSE)
-			{
-				continue;
-			}
-		}
-
 		if(($this->client = @stream_socket_accept($this->socket)) !== FALSE)
 		{
+			if($o->reg->true('_phpd.ssl.on'))
+			{
+				if(stream_socket_enable_crypto($this->client, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) === FALSE)
+				{
+					return FALSE;
+				}
+			}
 			$o->request = fread($this->client, $o->reg->get('_phpd.requestLimit'));
 		}
 		else
