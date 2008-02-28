@@ -29,8 +29,7 @@ declare(ticks = 1);
 require_once('transport/stream.php');
 require_once('transport/socket.php');
 
-//require_once('/usr/lib/aplc/Aplc.php');
-require_once('../../Aplc.php');
+require_once('/usr/lib/aplc/Aplc.php');
 Aplc::setupAutoloader();
 
 class Phpd_Autoloader implements Aplc_Autoloader
@@ -48,14 +47,6 @@ class Phpd_Autoloader implements Aplc_Autoloader
 			require_once $file;
 		}
 	}
-}
-
-interface Phpd_Application
-{
-	public function init(Phpd_Child $o);
-	public function response(Phpd_Child $o);
-	public function cleanup(Phpd_Child $o);
-	public function deinit(Phpd_Child $o);
 }
 
 interface Phpd_Module
@@ -80,12 +71,11 @@ class Phpd_Child extends Aplc_Daemon_Child
 	public $server = "phpd/1.0";
 	public $protocol = "HTTP/1.1";
 	public $transport;
+	public $request;
 	public $response;
 	public $headers = array();
 	public $modules = array();
 	public $data = '';
-	public $application = FALSE;
-	public $applications = array();
 
 	public function start()
 	{
@@ -93,36 +83,33 @@ class Phpd_Child extends Aplc_Daemon_Child
 		pcntl_alarm(1);
 
 		$this->pokeModules('init');
-		$this->application->init($this);
 
 		while(1)
 		{
 			if($this->transport->request($this))
 			{
-				$this->pokeModules('request');
-
-				/* main application entry point */
-				$this->data = $this->application->response($this);
-				/* */
-
-				$this->pokeModules('response');
-
-				//this is for ab as it does not account for dynamic data (and you will get length errors), afaik.
-				//$this->data = substr($this->data, 1, 150);
-
-				$headers = $this->headers(200, "OK", strlen($this->data));
-
-				$this->response = (string)$headers.$this->data;
-
-				$this->transport->response($this);
-
-				$this->application->cleanup($this); // application cleanup
-				$this->pokeModules('cleanup'); // module cleanup
-				$this->cleanup(); // phpd cleanup
-
-				if($this->shutdown)
+				if($this->pokeModules('request'))
 				{
-					return;
+					if($this->pokeModules('response'))
+					{
+
+						//this is for ab as it does not account for dynamic data (and you will get length errors), afaik.
+						//$this->data = substr($this->data, 1, 150);
+
+						$headers = $this->headers(200, "OK", strlen($this->data));
+
+						$this->response = (string)$headers.$this->data;
+
+						$this->transport->response($this);
+
+						$this->pokeModules('cleanup'); // module cleanup
+						$this->cleanup(); // phpd cleanup
+
+						if($this->shutdown)
+						{
+							return;
+						}
+					}
 				}
 			}
 
@@ -135,25 +122,39 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function pokeModules($action)
 	{
+		$failure = FALSE;
+
+		if($action == 'deinit')
+		{
+			$this->modules = array_reverse($this->modules, TRUE);
+		}
+
 		try
 		{
-			foreach($this->modules as $module)
+			foreach($this->modules as $name => $module)
 			{
-				$module->$action($this);
-			}
-		}
-		catch(Aplc_Exception $e)
-		{
-			echo $e->getMessage();
-			while(1)
-			{
-				if($this->shutdown)
+				if(!$module->$action($this))
 				{
-					return;
+					$this->log->write('Failed to poke module: '.$name.' with action: '.$action);
+					sleep(1);
+					return FALSE;
 				}
-				sleep(1);
 			}
 		}
+                catch(Aplc_Exception $e)
+                {
+                        echo $e->getMessage();
+                        while(1)
+                        {
+                                if($this->shutdown)
+                                {
+                                        return;
+                                }
+                                sleep(1);
+                        }
+                }
+
+		return TRUE;
 	}
 
 	public function cleanup()
@@ -188,7 +189,6 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
-		$this->application->deinit($this);
 		$this->pokeModules('deinit');
 	}
 
@@ -214,22 +214,6 @@ class Phpd extends Aplc_Daemon
 			$this->transport = new $class;
 		}
 
-		if(!$this->reg->exists('_phpd.application'))
-		{
-			exit("Unable to determine application!\n");
-		}
-
-		if(!file_exists($this->reg->get('_phpd.application').'/entrypoint.php'))
-		{
-			exit("Unable to locate application entrypoint.\n");
-		}
-		else
-		{
-			$class = $this->reg->get('_phpd.application');
-			require_once($class.'/entrypoint.php');
-			$application = new $class;
-		}
-
 		$this->initLog();
 		$this->childRespawn = TRUE;
 
@@ -239,7 +223,6 @@ class Phpd extends Aplc_Daemon
 		}
 
 		$phpd = new Phpd_Child;
-		$phpd->application = $application;
 		$phpd->transport = $this->transport;
 
 		if($this->reg->exists('_phpd.moduleLocation,_phpd.module'))
@@ -247,7 +230,7 @@ class Phpd extends Aplc_Daemon
 			foreach($this->reg->get('_phpd.module') as $module => $discard)
 			{
 				$class = 'Phpd_Module_'.$module;
-				$phpd->modules[] = new $class;
+				$phpd->modules[$module] = new $class;
 			}
 		}
 
@@ -264,7 +247,6 @@ class Phpd extends Aplc_Daemon
 		}
 
 		unset($phpd);
-		unset($application);
 	}
 
 	public function reload()

@@ -54,7 +54,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 	{
 		if(($this->client = @socket_accept($this->socket)) !== FALSE)
 		{
-			$o->request = socket_read($this->client, $o->reg->get('_phpd.requestLimit'));
+			$o->request = @socket_read($this->client, $o->reg->get('_phpd.requestLimit'));
+			socket_shutdown($this->client, 0);
 		}
 		else
 		{
@@ -70,7 +71,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		{
 			echo "Failed to write response...\n";
 		}
-		socket_close($this->client);
+		socket_shutdown($this->client, 1);
+		//socket_close($this->client);
 	}
 
 	public function deinit(Phpd $o)

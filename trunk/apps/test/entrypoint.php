@@ -11,17 +11,24 @@ class test implements Phpd_Application
 		$this->db->database('iris');
 	}
 
+	public function request(Phpd_Child $o)
+	{
+
+	}
+
         public function response(Phpd_Child $o)
 	{
                 $this->counter++;
                 if(!isset($_SESSION['somevar'])) $_SESSION['somevar'] = rand(0, 1000000);
                 $ret = "Hello ".session_id()." from child: ".$o->pid.", the time and date is: ".date('d/m/Y H:i:s')." and I've been called: ".$this->counter." times.  Your random number is: ".$_SESSION['somevar']."\n";
 
-		$result = $this->db->query("select count(*) as count from iris_students");
-		$row = $result->row();
-		$ret .= 'And the count in iris_students is: '.$row['count'];
+		//usleep(rand(0, 1000000));
 
-                return $ret;
+		//$result = $this->db->query("select count(*) as count from iris_students");
+		//$row = $result->row();
+		//$ret .= 'And the count in iris_students is: '.$row['count'];
+
+		$o->data = $ret;
 	}
 
         public function cleanup(Phpd_Child $o)

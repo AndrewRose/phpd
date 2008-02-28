@@ -24,24 +24,29 @@ class Phpd_Module_Compression implements Phpd_Module
 {
 	public function init(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
 		// need to check client can handle gzip compression..
 		$o->header('Content-Encoding: deflate');
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
 		$o->data = gzdeflate($o->data);
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 }

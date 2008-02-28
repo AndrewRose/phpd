@@ -42,18 +42,27 @@ class Phpd_Module_Database implements Phpd_Module
 		{
 			// log wasted cpu time
 		}
+
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
+		foreach($this->dbs as $db)
+		{
+			$db->ping();
+		}
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
@@ -62,5 +71,6 @@ class Phpd_Module_Database implements Phpd_Module
 		{
 			$db->close();
 		}
+		return TRUE;
 	}
 }

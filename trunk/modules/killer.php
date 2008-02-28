@@ -27,15 +27,18 @@ class Phpd_Module_Killer implements Phpd_Module
 
 	public function init(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
 	{
 		set_time_limit($o->reg->get('_phpd.module.Killer.timeout'));
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
@@ -58,9 +61,11 @@ class Phpd_Module_Killer implements Phpd_Module
 			$o->log->write("You have the killer module loaded but do not have '_phpd.module.Killer.requests' set.  This means this module is wasting CPU time."); 
 			$this->logPointless = TRUE;
 		}
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
 	{
+		return TRUE;
 	}
 }
