@@ -71,8 +71,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		{
 			echo "Failed to write response...\n";
 		}
-		socket_shutdown($this->client, 1);
-		//socket_close($this->client);
+		//socket_shutdown($this->client, 1);
+		socket_close($this->client);
 	}
 
 	public function deinit(Phpd $o)
