@@ -27,7 +27,6 @@ class Phpd_Transport_Socket implements Phpd_Transport
 
 	public function init(Phpd $o)
 	{
-
 		if(!($this->socket = @socket_create(AF_INET, SOCK_STREAM, 0)))
 		{
 			exit("Failed to create socket!\n");
@@ -54,8 +53,10 @@ class Phpd_Transport_Socket implements Phpd_Transport
 	{
 		if(($this->client = @socket_accept($this->socket)) !== FALSE)
 		{
-			$o->request = @socket_read($this->client, $o->reg->get('_phpd.requestLimit'));
+			pcntl_alarm(0);
+			$o->request = socket_read($this->client, $o->reg->get('_phpd.requestLimit'));
 			socket_shutdown($this->client, 0);
+			pcntl_alarm(5);
 		}
 		else
 		{
@@ -71,8 +72,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		{
 			echo "Failed to write response...\n";
 		}
-		//socket_shutdown($this->client, 1);
-		socket_close($this->client);
+		socket_shutdown($this->client, 1);
+		//socket_close($this->client);
 	}
 
 	public function deinit(Phpd $o)

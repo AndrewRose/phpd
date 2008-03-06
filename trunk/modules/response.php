@@ -45,12 +45,20 @@ class Phpd_Module_Response implements Phpd_Module
 				$this->application = new $application;
 				if($this->application instanceof Phpd_Application)
 				{
-					$this->application->init($o);
-					return TRUE;
+					$this->application->init($o); return TRUE;
+				}
+				else
+				{
+					$o->log->write("Failed to start application as it is not an instance of Phpd_Application!");
 				}
 			}
+			else
+			{
+				$o->log->write("Failed to start application as I could not find the entrypoint: ".$entrypoint);
+			}
 		}
-		return FALSE;
+
+		return TRUE;
 	}
 
 	public function request(Phpd_Child $o)
@@ -58,9 +66,8 @@ class Phpd_Module_Response implements Phpd_Module
 		if($this->application)
 		{
 			$this->application->request($o);
-			return TRUE;
 		}
-		return FALSE;
+		return TRUE;
 	}
 
 	public function response(Phpd_Child $o)
@@ -68,9 +75,8 @@ class Phpd_Module_Response implements Phpd_Module
 		if($this->application)
 		{
 			$this->application->response($o);
-			return TRUE;
 		}
-		return FALSE;
+		return TRUE;
 	}
 
 	public function cleanup(Phpd_Child $o)
@@ -78,9 +84,8 @@ class Phpd_Module_Response implements Phpd_Module
 		if($this->application)
 		{
 			$this->application->cleanup($o);
-			return TRUE;
 		}
-		return FALSE;
+		return TRUE;
 	}
 
 	public function deinit(Phpd_Child $o)
@@ -89,8 +94,7 @@ class Phpd_Module_Response implements Phpd_Module
 		{
 			$this->application->deinit($o);
 			unset($this->application);
-			return TRUE;
 		}
-		return FALSE;
+		return TRUE;
 	}
 }
