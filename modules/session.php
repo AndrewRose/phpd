@@ -68,7 +68,7 @@ class Phpd_Module_Session implements Phpd_Module
 			}
 		}
 
-		@session_start();
+		session_start();
 		return TRUE;
 	}
 

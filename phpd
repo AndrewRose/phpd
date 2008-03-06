@@ -77,12 +77,25 @@ class Phpd_Child extends Aplc_Daemon_Child
 	public $modules = array();
 	public $data = '';
 
+	public $status = 200;
+	public $statusCodes = array(
+		200 => 'OK',
+		500 => 'Internal Server Error',
+		501 => 'Not Implemented',
+		505 => 'HTTP Version Not Supported'
+	);
+
 	public function start()
 	{
 		pcntl_signal(SIGALRM, array(&$this, "sigAlarm"));
-		pcntl_alarm(1);
+		pcntl_alarm(5);
 
-		$this->pokeModules('init');
+		if(!$this->pokeModules('init'))
+		{
+			$this->log->write('Unable to init modules');
+			sleep(5);
+			exit();
+		}
 
 		while(1)
 		{
@@ -90,26 +103,38 @@ class Phpd_Child extends Aplc_Daemon_Child
 			{
 				if($this->pokeModules('request'))
 				{
-					if($this->pokeModules('response'))
+					if(!$this->pokeModules('response'))
 					{
-
-						//this is for ab as it does not account for dynamic data (and you will get length errors), afaik.
-						//$this->data = substr($this->data, 1, 150);
-
-						$headers = $this->headers(200, "OK", strlen($this->data));
-
-						$this->response = (string)$headers.$this->data;
-
-						$this->transport->response($this);
-
-						$this->pokeModules('cleanup'); // module cleanup
-						$this->cleanup(); // phpd cleanup
-
-						if($this->shutdown)
+						if($this->status == 200)
 						{
-							return;
+							$this->status = 500;
 						}
 					}
+				}
+				else
+				{
+					if($this->status == 200)
+					{
+						$this->status = 500;
+					}
+				}
+
+				if($this->status!= 200)
+				{
+					$this->data = $this->statusCodes[$this->status];
+				}
+
+				$headers = $this->headers($this->status, $this->statusCodes[$this->status], strlen($this->data));
+				$this->response = (string)$headers.$this->data;
+
+				$this->transport->response($this);
+
+				$this->pokeModules('cleanup'); // module cleanup
+				$this->cleanup(); // phpd cleanup
+
+				if($this->shutdown)
+				{
+					return;
 				}
 			}
 
@@ -160,6 +185,10 @@ class Phpd_Child extends Aplc_Daemon_Child
 	public function cleanup()
 	{
 		$this->headers = array();
+		$this->request = '';
+		$this->response = '';
+		$this->data = '';
+		$this->status = 200;
 	}
 
 	public function header($header)
@@ -194,7 +223,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function sigAlarm()
 	{
-		pcntl_alarm(1);
+		pcntl_alarm(5);
 	}
 }
 
