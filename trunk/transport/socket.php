@@ -22,24 +22,25 @@
 
 class Phpd_Transport_Socket implements Phpd_Transport
 {
+	public $phpd;
 	private $socket;
 	private $client;
 
-	public function init(Phpd $o)
+	public function init()
 	{
 		if(!($this->socket = @socket_create(AF_INET, SOCK_STREAM, 0)))
 		{
 			exit("Failed to create socket!\n");
 		}
 
-		if(!@socket_bind($this->socket, $o->reg->get('_phpd.address'), $o->reg->get('_phpd.port')))
+		if(!@socket_bind($this->socket, $this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port')))
 		{
 			$error = socket_last_error($this->socket);
 			$error = socket_strerror($error);
 			exit('Unable to bind to socket: '.$error."\n");
 		}
 
-		if(!@socket_listen($this->socket, $o->reg->get('_phpd.backLog')))
+		if(!@socket_listen($this->socket, $this->phpd->reg->get('_phpd.backLog')))
 		{
 			exit("Unable to listen on socket!\n");
 		}
@@ -49,12 +50,12 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 		if(($this->client = @socket_accept($this->socket)) !== FALSE)
 		{
 			pcntl_alarm(0);
-			$o->request = socket_read($this->client, $o->reg->get('_phpd.requestLimit'));
+			$this->phpd->request = socket_read($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
 			socket_shutdown($this->client, 0);
 			pcntl_alarm(5);
 		}
@@ -66,9 +67,9 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
-		if(socket_write($this->client, $o->response, strlen($o->response)) != strlen($o->response))
+		if(socket_write($this->client, $this->phpd->response, strlen($this->phpd->response)) != strlen($this->phpd->response))
 		{
 			echo "Failed to write response...\n";
 		}
@@ -76,7 +77,7 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		//socket_close($this->client);
 	}
 
-	public function deinit(Phpd $o)
+	public function deinit()
 	{
 		socket_close($this->socket);
 	}

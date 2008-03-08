@@ -24,18 +24,19 @@
 
 class Phpd_Module_Database implements Phpd_Module
 {
+	public $phpd;
 	private $dbs = array();
 
-	public function init(Phpd_Child $o)
+	public function init()
 	{
-		if($o->reg->exists('_phpd.module.Database'))
+		if($this->phpd->reg->exists('_phpd.module.Database'))
 		{
-			foreach($o->reg->get('_phpd.module.Database') as $database => $discard)
+			foreach($this->phpd->reg->get('_phpd.module.Database') as $database => $discard)
 			{
 				$db = new Aplc_Db;
-				$db->init($o->reg->getReference('_phpd.module.Database.'.$database));
+				$db->init($this->phpd->reg->getReference('_phpd.module.Database.'.$database));
 				$this->dbs[] = $db; // save reference to making deinits life easier
-				$o->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
+				$this->phpd->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
 			}
 		}
 		else
@@ -46,7 +47,7 @@ class Phpd_Module_Database implements Phpd_Module
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 		foreach($this->dbs as $db)
 		{
@@ -55,17 +56,17 @@ class Phpd_Module_Database implements Phpd_Module
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
 		return TRUE;
 	}
 
-	public function cleanup(Phpd_Child $o)
+	public function cleanup()
 	{
 		return TRUE;
 	}
 
-	public function deinit(Phpd_Child $o)
+	public function deinit()
 	{
 		foreach($this->dbs as $db)
 		{

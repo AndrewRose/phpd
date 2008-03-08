@@ -2,23 +2,25 @@
 
 class test implements Phpd_Application
 {
-        public function init(Phpd_Child $o)
+	public $phpd;
+
+        public function init()
 	{
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 	}
 
-        public function response(Phpd_Child $o)
+        public function response()
 	{
 	}
 
-        public function cleanup(Phpd_Child $o)
+        public function cleanup()
 	{
 	}
 
-        public function deinit(Phpd_Child $o)
+        public function deinit()
 	{
 	}
 }
