@@ -26,28 +26,29 @@ PHP bug #32330 means we have to reset the handles on every request.  However we 
 
 class Phpd_Module_Session implements Phpd_Module
 {
+	public $phpd;
 	private $session;
 	private $sessionId = 'PHPDSESSID';
 
-	public function init(Phpd_Child $o)
+	public function init()
 	{
-		if(!$o->reg->exists('_phpd.module.Session.database'))
+		if(!$this->phpd->reg->exists('_phpd.module.Session.database'))
 		{
 			throw new Aplc_Exception_Session('Unable to start session module due to incorrect or missing registry entries');
 		}
 
 		$this->session = new Aplc_Session_Db;
 
-		if($o->reg->exists('_phpd.module.Session.name'))
+		if($this->phpd->reg->exists('_phpd.module.Session.name'))
 		{
-			$this->sessionId = $o->reg->get('_phpd.module.Session.name');
+			$this->sessionId = $this->phpd->reg->get('_phpd.module.Session.name');
 		}
 
-		$this->session->init($o->reg->getReference('_phpd.module.Session.database'));
+		$this->session->init($this->phpd->reg->getReference('_phpd.module.Session.database'));
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 		$this->session->setHandlers();
 
@@ -59,7 +60,7 @@ class Phpd_Module_Session implements Phpd_Module
 		{
 			if(($id = $this->session->genId()))
 			{
-				$o->header('Set-Cookie: '.$this->sessionId.'='.$id);
+				$this->phpd->header('Set-Cookie: '.$this->sessionId.'='.$id);
 				session_id($id);
 			}
 			else
@@ -72,12 +73,12 @@ class Phpd_Module_Session implements Phpd_Module
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
 		return TRUE;
 	}
 
-	public function cleanup(Phpd_Child $o)
+	public function cleanup()
 	{
 		session_write_close();
 		//session_destroy();
@@ -85,7 +86,7 @@ class Phpd_Module_Session implements Phpd_Module
 		return TRUE;
 	}
 
-	public function deinit(Phpd_Child $o)
+	public function deinit()
 	{
 		return TRUE;
 	}

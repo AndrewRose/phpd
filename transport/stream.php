@@ -22,31 +22,32 @@
 
 class Phpd_Transport_Stream implements Phpd_Transport
 {
+	public $phpd;
 	private $socket;
 	private $client;
 
-	public function init(Phpd $o)
+	public function init()
 	{
 		$context = stream_context_create();
 
-		if($o->reg->true('_phpd.ssl.on'))
+		if($this->phpd->reg->true('_phpd.ssl.on'))
 		{
-			stream_context_set_option($context, 'ssl', 'local_cert',$o->reg->get('_phpd.ssl.local_cert'));
-			stream_context_set_option($context, 'ssl', 'passphrase', $o->reg->get('_phpd.ssl.passphrase'));
+			stream_context_set_option($context, 'ssl', 'local_cert',$this->phpd->reg->get('_phpd.ssl.local_cert'));
+			stream_context_set_option($context, 'ssl', 'passphrase', $this->phpd->reg->get('_phpd.ssl.passphrase'));
 
-			if($o->reg->true('_phpd.ssl.allow_self_signed'))
+			if($this->phpd->reg->true('_phpd.ssl.allow_self_signed'))
 			{
 				stream_context_set_option($context, 'ssl', 'allow_self_signed', true);
 			}
-			if($o->reg->true('_phpd.ssl.verify_peer'))
+			if($this->phpd->reg->true('_phpd.ssl.verify_peer'))
 			{
 				stream_context_set_option($context, 'ssl', 'verify_peer', true);
 			}
 
-			$o->reg->set('_phpd.port', $o->reg->getOrSet('_phpd.ssl.port', '_phpd.port')); 
+			$this->phpd->reg->set('_phpd.port', $this->phpd->reg->getOrSet('_phpd.ssl.port', '_phpd.port')); 
 		}
 
-		if(!($this->socket = stream_socket_server('tcp://'.$o->reg->get('_phpd.address').':'.$o->reg->get('_phpd.port'), $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN, $context)))
+		if(!($this->socket = stream_socket_server('tcp://'.$this->phpd->reg->get('_phpd.address').':'.$this->phpd->reg->get('_phpd.port'), $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN, $context)))
 		{
 			return FALSE;
 		}
@@ -56,19 +57,19 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 		if(($this->client = @stream_socket_accept($this->socket)) !== FALSE)
 		{
 			pcntl_alarm(0);
-			if($o->reg->true('_phpd.ssl.on'))
+			if($this->phpd->reg->true('_phpd.ssl.on'))
 			{
 				if(stream_socket_enable_crypto($this->client, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) === FALSE)
 				{
 					return FALSE;
 				}
 			}
-			$o->request = fread($this->client, $o->reg->get('_phpd.requestLimit'));
+			$this->phpd->request = fread($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
 			pcntl_alarm(5);
 		}
 		else
@@ -79,17 +80,17 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
-		if(fwrite($this->client, $o->response) == FALSE)
+		if(fwrite($this->client, $this->phpd->response) == FALSE)
 		{
-			$o->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
+			$this->phpd->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
 		}
 
 		stream_socket_shutdown($this->client, STREAM_SHUT_RDWR);
 	}
 
-	public function deinit(Phpd $o)
+	public function deinit()
 	{
 		stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
 	}

@@ -22,34 +22,35 @@
 
 class Phpd_Module_Killer implements Phpd_Module
 {
+	public $phpd;
 	private $calls = 0;
 	private $logPointless = FALSE;
 
-	public function init(Phpd_Child $o)
+	public function init()
 	{
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
-		set_time_limit($o->reg->get('_phpd.module.Killer.timeout'));
+		set_time_limit($this->phpd->reg->get('_phpd.module.Killer.timeout'));
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
 		return TRUE;
 	}
 
-	public function cleanup(Phpd_Child $o)
+	public function cleanup()
 	{
 		set_time_limit(0);
 
-		if($o->reg->exists('_phpd.module.Killer.requests'))
+		if($this->phpd->reg->exists('_phpd.module.Killer.requests'))
 		{
-			if($this->calls >= $o->reg->get('_phpd.module.Killer.requests'))
+			if($this->calls >= $this->phpd->reg->get('_phpd.module.Killer.requests'))
 			{
-				$o->shutdown = TRUE;
+				$this->phpd->shutdown = TRUE;
 			}
 			else
 			{
@@ -58,13 +59,13 @@ class Phpd_Module_Killer implements Phpd_Module
 		}
 		else if(!$this->logPointless)
 		{
-			$o->log->write("You have the killer module loaded but do not have '_phpd.module.Killer.requests' set.  This means this module is wasting CPU time."); 
+			$this->phpd->log->write("You have the killer module loaded but do not have '_phpd.module.Killer.requests' set.  This means this module is wasting CPU time."); 
 			$this->logPointless = TRUE;
 		}
 		return TRUE;
 	}
 
-	public function deinit(Phpd_Child $o)
+	public function deinit()
 	{
 		return TRUE;
 	}

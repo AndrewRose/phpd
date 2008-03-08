@@ -22,38 +22,40 @@
 
 class Phpd_Module_Request implements Phpd_Module
 {
-	public function init(Phpd_Child $o)
+	public $phpd;
+	
+	public function init()
 	{
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
-		if(!$this->dissolveRequest($o->request, $o))
+		if(!$this->dissolveRequest($this->phpd->request, $this->phpd))
 		{
 			return FALSE;
 		}
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
 		return TRUE;
 	}
 
-	public function cleanup(Phpd_Child $o)
+	public function cleanup()
 	{
-		$o->request = FALSE; 
+		$this->phpd->request = FALSE; 
 		return TRUE;
 	}
 
-	public function deinit(Phpd_Child $o)
+	public function deinit()
 	{
 		return TRUE;
 	}
 
 	/* http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html */
-	public function dissolveRequest($request, Phpd_Child $o)
+	public function dissolveRequest($request)
 	{
 		$_SERVER = array();
                 $_COOKIE = array();
@@ -69,7 +71,7 @@ class Phpd_Module_Request implements Phpd_Module
 
 		if( !isset($parts[2]) || (($parts[2] != 'HTTP/1.1') && ($parts[2] != 'HTTP/1.0')) )
 		{
-			$o->status = 505;
+			$this->phpd->status = 505;
 			return FALSE;
 		}
 
@@ -87,7 +89,7 @@ class Phpd_Module_Request implements Phpd_Module
 			}
 			break;
 			default:
-				$o->status = 501;
+				$this->phpd->status = 501;
 				return FALSE;
 			break;
 		}

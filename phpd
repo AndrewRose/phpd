@@ -51,19 +51,19 @@ class Phpd_Autoloader implements Aplc_Autoloader
 
 interface Phpd_Module
 {
-	public function init(Phpd_Child $o);
-	public function request(Phpd_Child $o);
-	public function response(Phpd_Child $o);
-	public function cleanup(Phpd_Child $o);
-	public function deinit(Phpd_Child $o);
+	public function init();
+	public function request();
+	public function response();
+	public function cleanup();
+	public function deinit();
 }
 
 interface Phpd_Transport
 {
-	public function init(Phpd $o);
-	public function request(Phpd_Child $o);
-	public function response(Phpd_Child $o);
-	public function deinit(Phpd $o);
+	public function init();
+	public function request();
+	public function response();
+	public function deinit();
 }
 
 class Phpd_Child extends Aplc_Daemon_Child
@@ -90,6 +90,14 @@ class Phpd_Child extends Aplc_Daemon_Child
 		pcntl_signal(SIGALRM, array(&$this, "sigAlarm"));
 		pcntl_alarm(5);
 
+		/* setup this->phpd instances to the new Phpd_Child instance for the modules and transport */
+		foreach($this->modules as $name => $module)
+		{
+			$module->phpd = $this;
+		}
+		$this->transport->phpd = $this;
+		/* */
+
 		if(!$this->pokeModules('init'))
 		{
 			$this->log->write('Unable to init modules');
@@ -99,7 +107,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 		while(1)
 		{
-			if($this->transport->request($this))
+			if($this->transport->request())
 			{
 				if($this->pokeModules('request'))
 				{
@@ -127,7 +135,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 				$headers = $this->headers($this->status, $this->statusCodes[$this->status], strlen($this->data));
 				$this->response = (string)$headers.$this->data;
 
-				$this->transport->response($this);
+				$this->transport->response();
 
 				$this->pokeModules('cleanup'); // module cleanup
 				$this->cleanup(); // phpd cleanup
@@ -149,16 +157,11 @@ class Phpd_Child extends Aplc_Daemon_Child
 	{
 		$failure = FALSE;
 
-		if($action == 'deinit')
-		{
-			$this->modules = array_reverse($this->modules, TRUE);
-		}
-
 		try
 		{
 			foreach($this->modules as $name => $module)
 			{
-				if(!$module->$action($this))
+				if(!$module->$action())
 				{
 					$this->log->write('Failed to poke module: '.$name.' with action: '.$action);
 					sleep(1);
@@ -218,6 +221,11 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
+		if($action == 'deinit')
+		{
+			$this->modules = array_reverse($this->modules, TRUE);
+		}
+
 		$this->pokeModules('deinit');
 	}
 
@@ -241,12 +249,13 @@ class Phpd extends Aplc_Daemon
 		{
 			$class = 'Phpd_Transport_'.$this->reg->get('_phpd.transport');
 			$this->transport = new $class;
+			$this->transport->phpd = $this;
 		}
 
 		$this->initLog();
 		$this->childRespawn = TRUE;
 
-		if(!$this->transport->init($this))
+		if(!$this->transport->init())
 		{
 			exit("Unable to start socket server\n");
 		}
@@ -260,6 +269,7 @@ class Phpd extends Aplc_Daemon
 			{
 				$class = 'Phpd_Module_'.$module;
 				$phpd->modules[$module] = new $class;
+				$phpd->modules[$module]->phpd = $this;
 			}
 		}
 
@@ -286,7 +296,7 @@ class Phpd extends Aplc_Daemon
 	public function shutdown()
 	{
 		$this->waitChildren();
-		$this->transport->deinit($this);
+		$this->transport->deinit();
 	}
 }
 

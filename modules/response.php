@@ -22,77 +22,80 @@
 
 interface Phpd_Application
 {
-        public function init(Phpd_Child $o);
-	public function request(Phpd_Child $o);
-        public function response(Phpd_Child $o);
-        public function cleanup(Phpd_Child $o);
-        public function deinit(Phpd_Child $o);
+        public function init();
+	public function request();
+        public function response();
+        public function cleanup();
+        public function deinit();
 }
 
 class Phpd_Module_Response implements Phpd_Module
 {
+	public $phpd;
 	private $application=FALSE;
 
-	public function init(Phpd_Child $o)
+	public function init()
 	{
-		if($o->reg->exists('_phpd.module.Response.applicationRoot,_phpd.module.Response.defaultApplication'))
+		if($this->phpd->reg->exists('_phpd.module.Response.applicationRoot,_phpd.module.Response.defaultApplication'))
 		{
-			$application = $o->reg->get('_phpd.module.Response.defaultApplication');
-			$entryPoint = $o->reg->get('_phpd.module.Response.applicationRoot').$application.'/entrypoint.php';
+			$application = $this->phpd->reg->get('_phpd.module.Response.defaultApplication');
+			$entryPoint = $this->phpd->reg->get('_phpd.module.Response.applicationRoot').$application.'/entrypoint.php';
 			if(is_file($entryPoint))
 			{
 				require_once($entryPoint);
 				$this->application = new $application;
+				$this->application->phpd = $this->phpd;
+
 				if($this->application instanceof Phpd_Application)
 				{
-					$this->application->init($o); return TRUE;
+					$this->application->init($this->phpd); return TRUE;
 				}
 				else
 				{
-					$o->log->write("Failed to start application as it is not an instance of Phpd_Application!");
+					$this->phpd->log->write("Failed to start application as it is not an instance of Phpd_Application!");
 				}
 			}
 			else
 			{
-				$o->log->write("Failed to start application as I could not find the entrypoint: ".$entrypoint);
+				$this->phpd->log->write("Failed to start application as I could not find the entrypoint: ".$entrypoint);
 			}
 		}
 
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
 		if($this->application)
 		{
-			$this->application->request($o);
+			$this->application->request($this->phpd);
 		}
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
 		if($this->application)
 		{
-			$this->application->response($o);
+			$this->application->response($this->phpd);
 		}
 		return TRUE;
 	}
 
-	public function cleanup(Phpd_Child $o)
+	public function cleanup()
 	{
 		if($this->application)
 		{
-			$this->application->cleanup($o);
+			$this->application->cleanup($this->phpd);
 		}
 		return TRUE;
 	}
 
-	public function deinit(Phpd_Child $o)
+	public function deinit()
 	{
 		if($this->application)
 		{
-			$this->application->deinit($o);
+			$this->application->deinit($this->phpd);
 			unset($this->application);
 		}
 		return TRUE;
