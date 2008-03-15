@@ -90,20 +90,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 		pcntl_signal(SIGALRM, array(&$this, "sigAlarm"));
 		pcntl_alarm(5);
 
-		/* setup this->phpd instances to the new Phpd_Child instance for the modules and transport */
-		foreach($this->modules as $name => $module)
-		{
-			$module->phpd = $this;
-		}
-		$this->transport->phpd = $this;
-		/* */
-
-		if(!$this->pokeModules('init'))
-		{
-			$this->log->write('Unable to init modules');
-			sleep(5);
-			exit();
-		}
+		$this->log->write('Startup was a success! Awaiting connections.');
 
 		while(1)
 		{
@@ -221,11 +208,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
-		if($action == 'deinit')
-		{
-			$this->modules = array_reverse($this->modules, TRUE);
-		}
-
+		$this->modules = array_reverse($this->modules, TRUE);
 		$this->pokeModules('deinit');
 	}
 
@@ -260,18 +243,29 @@ class Phpd extends Aplc_Daemon
 			exit("Unable to start socket server\n");
 		}
 
+		/* create child instance and setup its environment from which all new instances will be created */
 		$phpd = new Phpd_Child;
 		$phpd->transport = $this->transport;
+		$phpd->transport->phpd = $phpd;
+		$phpd->reg = $this->reg;
+		/* */
 
+		/* setup modules.  Note that init() is run here and everything else apart from deinit() is run in the child instance */
 		if($this->reg->exists('_phpd.moduleLocation,_phpd.module'))
 		{
 			foreach($this->reg->get('_phpd.module') as $module => $discard)
 			{
 				$class = 'Phpd_Module_'.$module;
 				$phpd->modules[$module] = new $class;
-				$phpd->modules[$module]->phpd = $this;
+				$phpd->modules[$module]->phpd = $phpd;
+				if(!$phpd->modules[$module]->init())
+				{
+					$this->log->write('Unable to init module: '.$module);
+					exit();
+				}
 			}
 		}
+		/* */
 
 		/* override _aplc.Daemon.maxFork with our preFork setting */
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
@@ -285,6 +279,7 @@ class Phpd extends Aplc_Daemon
 			$this->child($phpd);
 		}
 
+/* todo: move module deinit() here */
 		unset($phpd);
 	}
 
