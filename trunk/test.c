@@ -74,8 +74,13 @@ int main(void)
 		printf("server: got connection from %s\n",inet_ntoa(their_addr.sin_addr));
 
 		//SSL_write(ssl, buf, sizeof(buf));
-		SSL_write(ssl, "Hello, world!\n", sizeof("Hello, world!\n"));
+		SSL_write(ssl, 
+"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello World!\n"
+,sizeof(
+"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello World!\n"
+));
 		//send(new_fd, "Hello, world!\n", 14, 0);
+		SSL_shutdown(ssl);
 		close(new_fd);
 	}
 }
