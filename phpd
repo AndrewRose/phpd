@@ -92,9 +92,6 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function start()
 	{
-		pcntl_signal(SIGALRM, array(&$this, "sigAlarm"));
-		pcntl_alarm(5);
-
 		$this->log->write('Startup was a success! Awaiting connections.');
 
 		while(1)
@@ -213,13 +210,9 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
+		$this->transport->deinit(FALSE);
 		$this->modules = array_reverse($this->modules, TRUE);
 		$this->pokeModules('deinit');
-	}
-
-	public function sigAlarm()
-	{
-		pcntl_alarm(5);
 	}
 }
 
@@ -250,7 +243,8 @@ class Phpd extends Aplc_Daemon
 
 		/* create child instance and setup its environment from which all new instances will be created */
 		$phpd = new Phpd_Child;
-		$phpd->transport = $this->transport;
+			/* we want to keep the parent transport intact */
+		$phpd->transport = clone $this->transport;
 		$phpd->transport->phpd = $phpd;
 		$phpd->reg = $this->reg;
 		/* */
@@ -295,8 +289,8 @@ class Phpd extends Aplc_Daemon
 
 	public function shutdown()
 	{
+		$this->transport->deinit(TRUE);
 		$this->waitChildren();
-		$this->transport->deinit();
 	}
 }
 

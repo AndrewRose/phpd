@@ -61,7 +61,6 @@ class Phpd_Transport_Stream implements Phpd_Transport
 	{
 		if(($this->client = @stream_socket_accept($this->socket)) !== FALSE)
 		{
-			pcntl_alarm(0);
 			if($this->phpd->reg->true('_phpd.ssl.on'))
 			{
 				if(stream_socket_enable_crypto($this->client, TRUE, STREAM_CRYPTO_METHOD_SSLv23_SERVER) === FALSE)
@@ -70,7 +69,6 @@ class Phpd_Transport_Stream implements Phpd_Transport
 				}
 			}
 			$this->phpd->request = fread($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
-			pcntl_alarm(5);
 		}
 		else
 		{
@@ -90,8 +88,18 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		stream_socket_shutdown($this->client, STREAM_SHUT_RDWR);
 	}
 
-	public function deinit()
+	public function deinit($parent=FALSE)
 	{
-		stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
+		if(!$parent)
+		{
+			stream_socket_shutdown($this->socket, STREAM_SHUT_RDWR);
+		}
+		else
+		{
+			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
+			{
+				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
+			}
+		}
 	}
 }
