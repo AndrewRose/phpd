@@ -33,6 +33,13 @@ class Phpd_Transport_Socket implements Phpd_Transport
 			exit("Failed to create socket!\n");
 		}
 
+		if(!socket_set_option($this->socket, SOL_SOCKET, SO_REUSEADDR, 1))
+		{
+			$error = socket_last_error($this->socket);
+			$error = socket_strerror($error);
+			exit('Unable to bind to socket: '.$error."\n");
+		}
+
 		if(!@socket_bind($this->socket, $this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port')))
 		{
 			$error = socket_last_error($this->socket);
@@ -54,10 +61,8 @@ class Phpd_Transport_Socket implements Phpd_Transport
 	{
 		if(($this->client = @socket_accept($this->socket)) !== FALSE)
 		{
-			pcntl_alarm(0);
 			$this->phpd->request = socket_read($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
 			socket_shutdown($this->client, 0);
-			pcntl_alarm(5);
 		}
 		else
 		{
@@ -73,12 +78,22 @@ class Phpd_Transport_Socket implements Phpd_Transport
 		{
 			echo "Failed to write response...\n";
 		}
-		socket_shutdown($this->client, 1);
-		//socket_close($this->client);
+		socket_close($this->client);
 	}
 
-	public function deinit()
+	public function deinit($parent=FALSE)
 	{
-		socket_close($this->socket);
+		if(!$parent)
+		{
+			socket_close($this->socket);
+		}
+		else
+		{
+			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
+			{
+				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
+			}
+
+		}
 	}
 }
