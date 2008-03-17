@@ -21,6 +21,11 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+if(php_sapi_name() != 'cli')
+{
+	exit("phpd will only work (predictably) using the CLI SAPI\n");
+}
+
 define('INICONF', 'phpd.ini');
 
 set_time_limit(0);
