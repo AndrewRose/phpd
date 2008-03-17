@@ -46,13 +46,13 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		'allow_self_signed' => true,
 		'verify_peer' => true,
 		'local_cert' => $o->reg->get('_phpd.ssl.local_cert'),
-		'passphrase' => $o->reg->get('_phpd.ssl.passphrase')
+		'passphrase' => $o->reg->get('_phpd.ssl.passphrase'),
+		'blocking' => TRUE
 		);
 
 		$this->socket = phpd_server($o->reg->get('_phpd.address'), $o->reg->get('_phpd.port'));
-		phpd_options_set($this->socket, $this->reg->get('_phpd.ssl'));
-		phpd_blocking_set($this->socket, TRUE);
-
+		phpd_set($this->socket, $this->reg->get('_phpd.ssl'));
+		// phpd_set($this->socket, array('blocking' => TRUE));
 		return TRUE;
 	}
 
@@ -81,6 +81,6 @@ class Phpd_Transport_Stream implements Phpd_Transport
 
 	public function deinit(Phpd $o)
 	{
-		phpd_socket_slose($this->socket);
+		phpd_socket_close($this->socket);
 	}
 }
