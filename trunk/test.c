@@ -17,7 +17,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define MYPORT 89
+#define MYPORT 443
 #define BACKLOG 10
 
 int main(void)
@@ -33,6 +33,8 @@ int main(void)
 	static SSL_CTX* ssl_ctx;
 	static SSL* ssl;
 	static int conn_fd;
+
+	char buf[100000];
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
@@ -56,22 +58,24 @@ int main(void)
 	while(1)
 	{
 		sin_size = sizeof their_addr;
+
 		if ((new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size)) == -1) {
 			perror("accept");
 			continue;
 		}
 
+		ssl = SSL_new(ssl_ctx);
+		SSL_set_fd(ssl, new_fd);
+		SSL_accept(ssl);
+
+		SSL_read(ssl, buf, sizeof(buf));
+
+		//printf("Request:\n %s", buf);
 		printf("server: got connection from %s\n",inet_ntoa(their_addr.sin_addr));
 
-		send(new_fd, "Hello, world!\n", 14, 0);
+		//SSL_write(ssl, buf, sizeof(buf));
+		SSL_write(ssl, "Hello, world!\n", sizeof("Hello, world!\n"));
+		//send(new_fd, "Hello, world!\n", 14, 0);
 		close(new_fd);
 	}
-
-/*
-	ssl = SSL_new(ssl_ctx);
-	SSL_set_fd(ssl, conn_fd);
-	SSL_accept(ssl);
-
-	SSL_read( ssl, buf, size );
-*/
 }
