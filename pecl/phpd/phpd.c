@@ -27,6 +27,43 @@
 #include "ext/standard/info.h"
 #include "php_phpd.h"
 
+/* phpd */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
+#include <signal.h>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+#define MYPORT 443
+#define BACKLOG 10
+
+FILE *phpd_log;
+int phpd_sockfd, phpd_new_fd;  // listen on sock_fd, new connection on phpd_new_fd
+struct sockaddr_in phpd_my_addr;        // my address information
+struct sockaddr_in phpd_their_addr; // connector's address information
+socklen_t phpd_sin_size;
+int phpd_yes=1; // wot dis den?
+
+static char* phpd_certfile = "server.pem";
+static char* phpd_cipher;
+static SSL_CTX* phpd_ssl_ctx;
+static SSL* phpd_ssl;
+static int phpd_conn_fd;
+
+char phpd_buf[100000];
+
+/* */
+
 /* If you declare any globals in php_phpd.h uncomment this:
 ZEND_DECLARE_MODULE_GLOBALS(phpd)
 */
@@ -181,10 +218,31 @@ PHP_FUNCTION(confirm_phpd_compiled)
     */
 PHP_FUNCTION(phpd_server)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
+	phpd_log = fopen("test.log", "w+");
+
+	phpd_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	setsockopt(phpd_sockfd, SOL_SOCKET, SO_REUSEADDR, &phpd_yes, sizeof(int));
+
+	phpd_my_addr.sin_family = AF_INET;               // host byte order
+	phpd_my_addr.sin_port = htons(MYPORT);   // short, network byte order
+	phpd_my_addr.sin_addr.s_addr = INADDR_ANY; // automatically fill with my IP
+	memset(phpd_my_addr.sin_zero, '\0', sizeof phpd_my_addr.sin_zero);
+
+	bind(phpd_sockfd, (struct sockaddr *)&phpd_my_addr, sizeof phpd_my_addr);
+	listen(phpd_sockfd, BACKLOG);
+
+	SSL_load_error_strings();
+	SSL_library_init();
+
+	phpd_ssl_ctx = SSL_CTX_new( SSLv23_server_method() );
+
+	if(	!SSL_CTX_use_certificate_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM) ||
+		!SSL_CTX_use_PrivateKey_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM) ||
+		!SSL_CTX_check_private_key(phpd_ssl_ctx)
+	){
+		//SSL_CTX_set_phpd_cipher_list(phpd_ssl_ctx, phpd_cipher);
+		ERR_print_errors_fp(phpd_log);
 	}
-	php_error(E_WARNING, "phpd_server: not yet implemented");
 }
 /* }}} */
 
@@ -203,10 +261,25 @@ PHP_FUNCTION(phpd_set)
     */
 PHP_FUNCTION(phpd_accept)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
+	phpd_sin_size = sizeof phpd_their_addr;
+
+	phpd_new_fd = accept(phpd_sockfd, (struct sockaddr *)&phpd_their_addr, &phpd_sin_size);
+
+	phpd_ssl = SSL_new(phpd_ssl_ctx);
+	if(phpd_ssl==NULL)
+	{
+		ERR_print_errors_fp(phpd_log);
 	}
-	php_error(E_WARNING, "phpd_accept: not yet implemented");
+
+	if(!SSL_set_fd(phpd_ssl, phpd_new_fd))
+	{
+		ERR_print_errors_fp(phpd_log);
+	}
+
+	if(!SSL_accept(phpd_ssl))
+	{
+		ERR_print_errors_fp(phpd_log);
+	}
 }
 /* }}} */
 
@@ -214,10 +287,10 @@ PHP_FUNCTION(phpd_accept)
     */
 PHP_FUNCTION(phpd_read)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
+	if(!SSL_read(phpd_ssl, phpd_buf, sizeof(phpd_buf)))
+	{
+		ERR_print_errors_fp(phpd_log);
 	}
-	php_error(E_WARNING, "phpd_read: not yet implemented");
 }
 /* }}} */
 
@@ -225,10 +298,14 @@ PHP_FUNCTION(phpd_read)
     */
 PHP_FUNCTION(phpd_write)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
+	if(!SSL_write(phpd_ssl,
+		"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 12\r\nConnection: close\r\n\r\nHello World!\n\0"
+		,sizeof(
+		"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 12\r\nConnection: close\r\n\r\nHello World!\n\0"
+	)-1))
+	{
+		ERR_print_errors_fp(phpd_log);
 	}
-	php_error(E_WARNING, "phpd_write: not yet implemented");
 }
 /* }}} */
 
@@ -236,10 +313,10 @@ PHP_FUNCTION(phpd_write)
     */
 PHP_FUNCTION(phpd_close)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
-	}
-	php_error(E_WARNING, "phpd_close: not yet implemented");
+// need to close the accept descriptor.. but not here
+// close(phpd_new_fd);
+	SSL_shutdown(phpd_ssl);
+        fclose(phpd_log);
 }
 /* }}} */
 
