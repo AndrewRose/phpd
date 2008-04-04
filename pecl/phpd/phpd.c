@@ -27,43 +27,6 @@
 #include "ext/standard/info.h"
 #include "php_phpd.h"
 
-/* phpd */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/wait.h>
-#include <signal.h>
-
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-
-#define MYPORT 443
-#define BACKLOG 10
-
-FILE *phpd_log;
-int phpd_sockfd, phpd_new_fd;  // listen on sock_fd, new connection on phpd_new_fd
-struct sockaddr_in phpd_my_addr;        // my address information
-struct sockaddr_in phpd_their_addr; // connector's address information
-socklen_t phpd_sin_size;
-int phpd_yes=1; // wot dis den?
-
-static char* phpd_certfile = "server.pem";
-static char* phpd_cipher;
-static SSL_CTX* phpd_ssl_ctx;
-static SSL* phpd_ssl;
-static int phpd_conn_fd;
-
-char phpd_buf[100000];
-
-/* */
-
 /* If you declare any globals in php_phpd.h uncomment this:
 ZEND_DECLARE_MODULE_GLOBALS(phpd)
 */
@@ -191,23 +154,6 @@ PHP_MINFO_FUNCTION(phpd)
    so that your module can be compiled into PHP, it exists only for testing
    purposes. */
 
-/* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_phpd_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_phpd_compiled)
-{
-	char *arg = NULL;
-	int arg_len, len;
-	char *strg;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &arg, &arg_len) == FAILURE) {
-		return;
-	}
-
-	len = spprintf(&strg, 0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "phpd", arg);
-	RETURN_STRINGL(strg, len, 0);
-}
-/* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
    function definition, where the functions purpose is also documented. Please 

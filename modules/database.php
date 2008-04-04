@@ -34,7 +34,15 @@ class Phpd_Module_Database implements Phpd_Module
 			foreach($this->phpd->reg->get('_phpd.module.Database') as $database => $discard)
 			{
 				$db = new Aplc_Db;
-				$db->init($this->phpd->reg->getReference('_phpd.module.Database.'.$database));
+				try 
+				{
+					$db->init($this->phpd->reg->getReference('_phpd.module.Database.'.$database));
+				}
+				catch(Aplc_Exception_Db $e)
+				{
+					echo $e->getMessage();
+					exit();
+				}
 				$this->dbs[] = $db; // save reference to making deinits life easier
 				$this->phpd->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
 			}

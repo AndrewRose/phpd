@@ -13,9 +13,9 @@ dnl [  --with-phpd             Include phpd support])
 
 dnl Otherwise use enable:
 
-dnl PHP_ARG_ENABLE(phpd, whether to enable phpd support,
-dnl Make sure that the comment is aligned:
-dnl [  --enable-phpd           Enable phpd support])
+PHP_ARG_ENABLE(phpd, whether to enable phpd support,
+Make sure that the comment is aligned:
+[  --enable-phpd           Enable phpd support])
 
 if test "$PHP_PHPD" != "no"; then
   dnl Write more examples of tests here...
