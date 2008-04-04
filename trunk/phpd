@@ -33,6 +33,7 @@ declare(ticks = 1);
 
 require_once('transport/stream.php');
 require_once('transport/socket.php');
+require_once('transport/phpd.php');
 
 require_once('/usr/lib/aplc/Aplc.php');
 Aplc::setupAutoloader();
@@ -116,7 +117,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 					}
 				}
 
-				if($this->status!= 200)
+				if($this->status != 200)
 				{
 					$this->data = $this->statusCodes[$this->status];
 				}
@@ -144,16 +145,15 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function pokeModules($action)
 	{
-		$failure = FALSE;
-
 		try
 		{
 			foreach($this->modules as $name => $module)
 			{
+				/* I've left out any function exists checks as it is implied in the module
+				interface.. plus it wastes cpu cycles. */
 				if(!$module->$action())
 				{
-					$this->log->write('Failed to poke module: '.$name.' with action: '.$action);
-					sleep(1);
+					$this->log->write('Failed to poke module: '.$name.', with action: '.$action);
 					return FALSE;
 				}
 			}
@@ -205,7 +205,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function reload()
 	{
-		$this->initRegistry();
+		$this->shutdown = TRUE;
 	}
 
 	public function shutdown()
@@ -238,12 +238,12 @@ class Phpd extends Aplc_Daemon
 
 		if(!$this->transport->init())
 		{
-			exit("Unable to start socket server\n");
+			exit('Unable to start '.$this->reg->get('_phpd.transport')." transport\n");
 		}
 
 		/* create child instance and setup its environment from which all new instances will be created */
 		$phpd = new Phpd_Child;
-			/* we want to keep the parent transport intact */
+			/* we want to keep the parent transport intact as we will be changing stuff by reference laters we clone now. */
 		$phpd->transport = clone $this->transport;
 		$phpd->transport->phpd = $phpd;
 		$phpd->reg = $this->reg;
@@ -267,7 +267,9 @@ class Phpd extends Aplc_Daemon
 		/* */
 
 		/* override _aplc.Daemon.maxFork with our preFork setting */
+echo $this->reg->get('_aplc.Daemon.maxFork')."\n";
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
+echo $this->reg->get('_aplc.Daemon.maxFork')."\n";
 
 		while(1)
 		{
@@ -284,7 +286,11 @@ class Phpd extends Aplc_Daemon
 
 	public function reload()
 	{
+		// we ask the transport to deinit as a parent which will poke the forked processes.
+		// we have to skip the parent socket shutdown.. needs fixing.. mayube another flag?
+		$this->transport->deinit(TRUE);
 		$this->initRegistry();
+		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
 	}
 
 	public function shutdown()

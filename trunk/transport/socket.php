@@ -93,7 +93,7 @@ class Phpd_Transport_Socket implements Phpd_Transport
 			{
 				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
 			}
-
+			//socket_close($this->socket);
 		}
 	}
 }

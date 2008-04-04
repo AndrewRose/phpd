@@ -21,6 +21,39 @@
 #ifndef PHP_PHPD_H
 #define PHP_PHPD_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
+#include <signal.h>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+#define MYPORT 443
+#define BACKLOG 10
+
+FILE *phpd_log;
+int phpd_sockfd, phpd_new_fd;  // listen on sock_fd, new connection on phpd_new_fd
+struct sockaddr_in phpd_my_addr;        // my address information
+struct sockaddr_in phpd_their_addr; // connector's address information
+socklen_t phpd_sin_size;
+int phpd_yes=1; // wot dis den?
+
+static char* phpd_certfile = "server.pem";
+static char* phpd_cipher;
+static SSL_CTX* phpd_ssl_ctx;
+static SSL* phpd_ssl;
+static int phpd_conn_fd;
+
+char phpd_buf[100000];
+
 extern zend_module_entry phpd_module_entry;
 #define phpext_phpd_ptr &phpd_module_entry
 

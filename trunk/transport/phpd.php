@@ -35,32 +35,39 @@ phpd_write([socket], [buffer], [length])
 phpd_close([socket]);
 */
 
-class Phpd_Transport_Stream implements Phpd_Transport
+class Phpd_Transport_Phpd implements Phpd_Transport
 {
+	public $phpd;
 	private $socket;
 	private $client;
 
-	public function init(Phpd $o)
+	public function init()
 	{
+		if(!$this->phpd->reg->true('_phpd.ssl.on'))
+		{
+			$this->phpd->log->write('The phpd transport only handles HTTPS!');
+			return FALSE;
+		}
+
 		$options = array(
 		'allow_self_signed' => true,
 		'verify_peer' => true,
-		'local_cert' => $o->reg->get('_phpd.ssl.local_cert'),
-		'passphrase' => $o->reg->get('_phpd.ssl.passphrase'),
+		'local_cert' => $this->phpd->reg->get('_phpd.ssl.local_cert'),
+		'passphrase' => $this->phpd->reg->get('_phpd.ssl.passphrase'),
 		'blocking' => TRUE
 		);
 
-		$this->socket = phpd_server($o->reg->get('_phpd.address'), $o->reg->get('_phpd.port'));
+		$this->socket = phpd_server($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'));
 		phpd_set($this->socket, $this->reg->get('_phpd.ssl'));
 		// phpd_set($this->socket, array('blocking' => TRUE));
 		return TRUE;
 	}
 
-	public function request(Phpd_Child $o)
+	public function request()
 	{
-		if(($this->client = phpd_accept($this->socket))
+		if(($this->client = phpd_accept($this->socket)))
 		{
-			$o->request =  phpd_read($this->client, $o->reg->get('_phpd.requestLimit'));
+			$this->phpd->request =  phpd_read($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
 		}
 		else
 		{
@@ -70,16 +77,16 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		return TRUE;
 	}
 
-	public function response(Phpd_Child $o)
+	public function response()
 	{
-		if(!phpd_write($this->client, $o->response))
+		if(!phpd_write($this->client, $this->phpd->response))
 		{
-			$o->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
+			$this->phpd->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
 		}
 		phpd_socket_close($this->client);
 	}
 
-	public function deinit(Phpd $o)
+	public function deinit()
 	{
 		phpd_socket_close($this->socket);
 	}
