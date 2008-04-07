@@ -267,9 +267,7 @@ class Phpd extends Aplc_Daemon
 		/* */
 
 		/* override _aplc.Daemon.maxFork with our preFork setting */
-echo $this->reg->get('_aplc.Daemon.maxFork')."\n";
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
-echo $this->reg->get('_aplc.Daemon.maxFork')."\n";
 
 		while(1)
 		{
