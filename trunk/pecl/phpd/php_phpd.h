@@ -36,9 +36,6 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-#define MYPORT 443
-#define BACKLOG 10
-
 extern zend_module_entry phpd_module_entry;
 #define phpext_phpd_ptr &phpd_module_entry
 
@@ -66,6 +63,7 @@ PHP_FUNCTION(phpd_read);
 PHP_FUNCTION(phpd_write);
 PHP_FUNCTION(phpd_close);
 PHP_FUNCTION(phpd_shutdown);
+PHP_FUNCTION(phpd_error);
 
  
 //ZEND_BEGIN_MODULE_GLOBALS(phpd)
@@ -73,8 +71,9 @@ PHP_FUNCTION(phpd_shutdown);
 	struct sockaddr_in phpd_my_addr;
 	struct sockaddr_in phpd_their_addr;
 	socklen_t 	phpd_sin_size;
-	int 		phpd_yes=1;
+	int 		phpd_yes=1, phpd_backlog=1024;
 
+	static char	*phpd_error_string;
 	static char 	*phpd_passphrase = NULL;
 	static char 	*phpd_certfile = NULL;
 	static SSL_CTX 	*phpd_ssl_ctx;
@@ -92,6 +91,12 @@ int pem_passwd_cb(char *buf, int size, int rwflag, void *data)
 
 	buf = NULL;
 	return 0;
+}
+
+int phpd_error_set(char *error)
+{
+	memset(phpd_error_string, '\0', 1024);
+	strncpy(phpd_error_string, error, 1024);
 }
 
 /* In every utility function you add that needs to use variables 

@@ -55,9 +55,10 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 		'blocking' => TRUE
 		);
 
+		// remeber that local_cert and passphrase must be set before starting the server.
 		phpd_set($this->phpd->reg->get('_phpd.ssl'));
 
-		phpd_server($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.ssl.port'));
+		phpd_server($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.ssl.port'), $this->phpd->reg->get('_phpd.backLog'));
 		// phpd_set(array('blocking' => TRUE));
 		return TRUE;
 	}
@@ -66,10 +67,21 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 	{
 		if(phpd_accept())
 		{
-			$this->phpd->request = phpd_read($this->phpd->reg->get('_phpd.requestLimit'));
+			if(!$this->phpd->request = phpd_read($this->phpd->reg->get('_phpd.requestLimit')))
+			{
+				if($error = phpd_error())
+				{
+					$this->phpd->log->write($error);
+				}
+				return FALSE;
+			}
 		}
 		else
 		{
+			if($error = phpd_error())
+			{
+				$this->phpd->log->write($error);
+			}
 			return FALSE;
 		}
 
@@ -88,13 +100,16 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 
 	public function deinit($parent=FALSE)
 	{
-		if($parent)
+		if(!$parent)
+		{
+			phpd_shutdown();
+		}
+		else
 		{
 			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
 			{
 				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
 			}
-			phpd_shutdown();
 		}
 	}
 }
