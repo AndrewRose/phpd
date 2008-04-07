@@ -39,21 +39,6 @@
 #define MYPORT 443
 #define BACKLOG 10
 
-FILE *phpd_log;
-int phpd_sockfd, phpd_new_fd;  // listen on sock_fd, new connection on phpd_new_fd
-struct sockaddr_in phpd_my_addr;        // my address information
-struct sockaddr_in phpd_their_addr; // connector's address information
-socklen_t phpd_sin_size;
-int phpd_yes=1; // wot dis den?
-
-static char* phpd_certfile = "server.pem";
-static char* phpd_cipher;
-static SSL_CTX* phpd_ssl_ctx;
-static SSL* phpd_ssl;
-static int phpd_conn_fd;
-
-char phpd_buf[100000];
-
 extern zend_module_entry phpd_module_entry;
 #define phpext_phpd_ptr &phpd_module_entry
 
@@ -80,16 +65,34 @@ PHP_FUNCTION(phpd_accept);
 PHP_FUNCTION(phpd_read);
 PHP_FUNCTION(phpd_write);
 PHP_FUNCTION(phpd_close);
+PHP_FUNCTION(phpd_shutdown);
 
-/* 
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:     
+ 
+//ZEND_BEGIN_MODULE_GLOBALS(phpd)
+	int 		phpd_server_fd, phpd_client_fd;
+	struct sockaddr_in phpd_my_addr;
+	struct sockaddr_in phpd_their_addr;
+	socklen_t 	phpd_sin_size;
+	int 		phpd_yes=1;
 
-ZEND_BEGIN_MODULE_GLOBALS(phpd)
-	long  global_value;
-	char *global_string;
-ZEND_END_MODULE_GLOBALS(phpd)
-*/
+	static char 	*phpd_passphrase = NULL;
+	static char 	*phpd_certfile = NULL;
+	static SSL_CTX 	*phpd_ssl_ctx;
+	static SSL	*phpd_ssl;
+//ZEND_END_MODULE_GLOBALS(phpd)
+
+int pem_passwd_cb(char *buf, int size, int rwflag, void *data)
+{
+	if(phpd_passphrase != NULL)
+	{
+		strncpy(buf, phpd_passphrase, sizeof(phpd_passphrase));
+		buf[sizeof(phpd_passphrase)] = '\0';
+		return(strlen(buf));
+	}
+
+	buf = NULL;
+	return 0;
+}
 
 /* In every utility function you add that needs to use variables 
    in php_phpd_globals, call TSRMLS_FETCH(); after declaring other 

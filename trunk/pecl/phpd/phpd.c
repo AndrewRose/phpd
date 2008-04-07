@@ -39,13 +39,13 @@ static int le_phpd;
  * Every user visible function must have an entry in phpd_functions[].
  */
 zend_function_entry phpd_functions[] = {
-	PHP_FE(confirm_phpd_compiled,	NULL)		/* For testing, remove later. */
 	PHP_FE(phpd_server,	NULL)
 	PHP_FE(phpd_set,	NULL)
 	PHP_FE(phpd_accept,	NULL)
 	PHP_FE(phpd_read,	NULL)
 	PHP_FE(phpd_write,	NULL)
 	PHP_FE(phpd_close,	NULL)
+	PHP_FE(phpd_shutdown,	NULL)
 	{NULL, NULL, NULL}	/* Must be the last line in phpd_functions[] */
 };
 /* }}} */
@@ -102,6 +102,9 @@ PHP_MINIT_FUNCTION(phpd)
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
+
+//	le_phpd_descriptor = zend_register_list_destructors_ex(NULL, NULL, le_phpd_name, module_number);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -150,45 +153,54 @@ PHP_MINFO_FUNCTION(phpd)
 /* }}} */
 
 
-/* Remove the following function when you have succesfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
-
 /* {{{ proto  phpd_server()
     */
 PHP_FUNCTION(phpd_server)
 {
-	phpd_log = fopen("test.log", "w+");
+	char *ip;
+	int port, ip_len;
 
-	phpd_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	setsockopt(phpd_sockfd, SOL_SOCKET, SO_REUSEADDR, &phpd_yes, sizeof(int));
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sl", &ip, &ip_len, &port) == FAILURE) {
+		RETURN_NULL();
+	}
 
-	phpd_my_addr.sin_family = AF_INET;               // host byte order
-	phpd_my_addr.sin_port = htons(MYPORT);   // short, network byte order
-	phpd_my_addr.sin_addr.s_addr = INADDR_ANY; // automatically fill with my IP
+	phpd_server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	setsockopt(phpd_server_fd, SOL_SOCKET, SO_REUSEADDR, &phpd_yes, sizeof(int));
+
+	phpd_my_addr.sin_family = AF_INET;
+	phpd_my_addr.sin_port = htons(port);
+	phpd_my_addr.sin_addr.s_addr = inet_addr(ip);
 	memset(phpd_my_addr.sin_zero, '\0', sizeof phpd_my_addr.sin_zero);
 
-	bind(phpd_sockfd, (struct sockaddr *)&phpd_my_addr, sizeof phpd_my_addr);
-	listen(phpd_sockfd, BACKLOG);
+	bind(phpd_server_fd, (struct sockaddr *)&phpd_my_addr, sizeof phpd_my_addr);
+	listen(phpd_server_fd, BACKLOG);
 
 	SSL_load_error_strings();
 	SSL_library_init();
 
 	phpd_ssl_ctx = SSL_CTX_new( SSLv23_server_method() );
 
-	if(	!SSL_CTX_use_certificate_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM) ||
-		!SSL_CTX_use_PrivateKey_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM) ||
-		!SSL_CTX_check_private_key(phpd_ssl_ctx)
-	){
-		//SSL_CTX_set_phpd_cipher_list(phpd_ssl_ctx, phpd_cipher);
-		ERR_print_errors_fp(phpd_log);
+	SSL_CTX_set_default_passwd_cb(phpd_ssl_ctx, pem_passwd_cb);
+
+	if(!SSL_CTX_use_certificate_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM))
+	{
+		php_error(E_WARNING, "phpd_server(): SSL_CTX_use_certificate_file().");
+		RETURN_FALSE;
 	}
+
+	if(!SSL_CTX_use_PrivateKey_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM))
+	{
+		php_error(E_WARNING, "phpd_server(): SSL_CTX_use_PrivateKey_file().");
+		RETURN_FALSE;
+	}
+
+	if(!SSL_CTX_check_private_key(phpd_ssl_ctx))
+	{
+		php_error(E_WARNING, "phpd_server(): SSL_CTX_check_private_key().");
+		RETURN_FALSE;
+	}
+
+	RETURN_TRUE;
 }
 /* }}} */
 
@@ -196,10 +208,44 @@ PHP_FUNCTION(phpd_server)
     */
 PHP_FUNCTION(phpd_set)
 {
-	if (ZEND_NUM_ARGS() != 0) {
-		WRONG_PARAM_COUNT;
+	zval *zarray, **data, temp;
+	HashTable *arr_hash;
+	HashPosition pointer;
+	char *key;
+	int key_len;
+	long index;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "a", &zarray) == FAILURE) {
+		RETURN_NULL();
 	}
-	php_error(E_WARNING, "phpd_set: not yet implemented");
+
+	arr_hash = Z_ARRVAL_P(zarray);
+
+	for(zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**) &data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer)) {
+
+		if (zend_hash_get_current_key_ex(arr_hash, &key, &key_len, &index, 0, &pointer) == HASH_KEY_IS_STRING) {
+
+			temp = **data;
+			zval_copy_ctor(&temp);
+			convert_to_string(&temp);
+
+			if(!strcmp(key, "local_cert")) {
+
+				phpd_certfile = emalloc(Z_STRLEN(temp));
+				strcpy(phpd_certfile, Z_STRVAL(temp));
+
+			} else if(!strcmp(key, "passphrase")) {
+
+				phpd_passphrase = emalloc(Z_STRLEN(temp));
+				strcpy(phpd_passphrase, Z_STRVAL(temp));
+
+			}
+
+			zval_dtor(&temp);
+		}
+	}
+
+	RETURN_TRUE;
 }
 /* }}} */
 
@@ -209,23 +255,25 @@ PHP_FUNCTION(phpd_accept)
 {
 	phpd_sin_size = sizeof phpd_their_addr;
 
-	phpd_new_fd = accept(phpd_sockfd, (struct sockaddr *)&phpd_their_addr, &phpd_sin_size);
+	phpd_client_fd = accept(phpd_server_fd, (struct sockaddr *)&phpd_their_addr, &phpd_sin_size);
 
 	phpd_ssl = SSL_new(phpd_ssl_ctx);
 	if(phpd_ssl==NULL)
 	{
-		ERR_print_errors_fp(phpd_log);
+		php_error(E_WARNING, "phpd_accept(): SSL_new().");
 	}
 
-	if(!SSL_set_fd(phpd_ssl, phpd_new_fd))
+	if(!SSL_set_fd(phpd_ssl, phpd_client_fd))
 	{
-		ERR_print_errors_fp(phpd_log);
+		php_error(E_WARNING, "phpd_accept(): SSL_set_fd().");
 	}
 
 	if(!SSL_accept(phpd_ssl))
 	{
-		ERR_print_errors_fp(phpd_log);
+		php_error(E_WARNING, "phpd_accept(): SSL_accept().");
 	}
+
+	RETURN_TRUE;
 }
 /* }}} */
 
@@ -233,10 +281,33 @@ PHP_FUNCTION(phpd_accept)
     */
 PHP_FUNCTION(phpd_read)
 {
-	if(!SSL_read(phpd_ssl, phpd_buf, sizeof(phpd_buf)))
-	{
-		ERR_print_errors_fp(phpd_log);
+	char		*tmpbuf;
+	int		retval;
+	long		length;
+
+        if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &length) == FAILURE) {
+                return;
+        }
+
+	/* overflow check */
+	if ((length + 1) < 2) {
+		RETURN_FALSE;
 	}
+
+	tmpbuf = emalloc(length + 1);
+
+	retval = SSL_read(phpd_ssl, tmpbuf, length);
+
+	if (retval == -1) {
+		php_error(E_WARNING, "phpd_read(): SSL_read().");
+                efree(tmpbuf);
+                RETURN_FALSE;
+        }
+
+	tmpbuf = erealloc(tmpbuf, retval + 1);
+	tmpbuf[retval] = '\0' ;
+
+	RETURN_STRINGL(tmpbuf, retval, 0);
 }
 /* }}} */
 
@@ -244,14 +315,25 @@ PHP_FUNCTION(phpd_read)
     */
 PHP_FUNCTION(phpd_write)
 {
-	if(!SSL_write(phpd_ssl,
-		"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 12\r\nConnection: close\r\n\r\nHello World!\n\0"
-		,sizeof(
-		"HTTP/1.1 200 OK\r\nServer: phpd/1.0\r\nContent-Type: text/html\r\nContent-Length: 12\r\nConnection: close\r\n\r\nHello World!\n\0"
-	)-1))
-	{
-		ERR_print_errors_fp(phpd_log);
-	}
+	int	retval, str_len;
+	long	length;
+	char	*str;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|l", &str, &str_len, &length) == FAILURE) {
+                return;
+        }
+
+        if (ZEND_NUM_ARGS() < 2) {
+                length = str_len;
+        }
+
+	retval = SSL_write(phpd_ssl, str, length);
+
+        if (retval < 0) {
+                RETURN_FALSE;
+        }
+
+        RETURN_LONG(retval);
 }
 /* }}} */
 
@@ -259,10 +341,17 @@ PHP_FUNCTION(phpd_write)
     */
 PHP_FUNCTION(phpd_close)
 {
-// need to close the accept descriptor.. but not here
-// close(phpd_new_fd);
+	close(phpd_client_fd);
 	SSL_shutdown(phpd_ssl);
-        fclose(phpd_log);
+}
+/* }}} */
+
+/* {{{ proto  phpd_shutdown()
+    */
+PHP_FUNCTION(phpd_shutdown)
+{
+	close(phpd_server_fd);
+	SSL_CTX_free(phpd_ssl_ctx);
 }
 /* }}} */
 

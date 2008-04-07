@@ -27,19 +27,17 @@ I don't see why simple file resource requests can't be threaded here also..
 
 
 phpd_server([ip], [port]);
-phpd_options_set([socket], [associative array]);
-phpd_blocking_set([socket], [true/false]);
-phpd_accept([socket]);
-phpd_read([socket], [length]);
-phpd_write([socket], [buffer], [length])
-phpd_close([socket]);
+phpd_options_set([associative array]);
+phpd_accept();
+phpd_read([length]);
+phpd_write([buffer], [length])
+phpd_close(); // close a client socket / ssl connection
+phpd_shutdown(); // shutdown server socket
 */
 
 class Phpd_Transport_Phpd implements Phpd_Transport
 {
 	public $phpd;
-	private $socket;
-	private $client;
 
 	public function init()
 	{
@@ -57,17 +55,18 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 		'blocking' => TRUE
 		);
 
-		$this->socket = phpd_server($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'));
-		phpd_set($this->socket, $this->reg->get('_phpd.ssl'));
-		// phpd_set($this->socket, array('blocking' => TRUE));
+		phpd_set($this->phpd->reg->get('_phpd.ssl'));
+
+		phpd_server($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.ssl.port'));
+		// phpd_set(array('blocking' => TRUE));
 		return TRUE;
 	}
 
 	public function request()
 	{
-		if(($this->client = phpd_accept($this->socket)))
+		if(phpd_accept())
 		{
-			$this->phpd->request =  phpd_read($this->client, $this->phpd->reg->get('_phpd.requestLimit'));
+			$this->phpd->request = phpd_read($this->phpd->reg->get('_phpd.requestLimit'));
 		}
 		else
 		{
@@ -79,15 +78,23 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 
 	public function response()
 	{
-		if(!phpd_write($this->client, $this->phpd->response))
+		if(!phpd_write($this->phpd->response))
 		{
 			$this->phpd->log->write('Failed to write response to socket.  This is most likely a problem neogotiating an IE connection in SSL mode.');
 		}
-		phpd_socket_close($this->client);
+		phpd_close();
 	}
 
-	public function deinit()
+
+	public function deinit($parent=FALSE)
 	{
-		phpd_socket_close($this->socket);
+		if($parent)
+		{
+			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
+			{
+				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
+			}
+			phpd_shutdown();
+		}
 	}
 }
