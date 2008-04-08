@@ -36,6 +36,12 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
 extern zend_module_entry phpd_module_entry;
 #define phpext_phpd_ptr &phpd_module_entry
 
@@ -64,23 +70,23 @@ PHP_FUNCTION(phpd_write);
 PHP_FUNCTION(phpd_close);
 PHP_FUNCTION(phpd_shutdown);
 PHP_FUNCTION(phpd_error);
+PHP_FUNCTION(phpd_sendfile);
 
- 
+int 			phpd_server_fd, phpd_client_fd;
+struct sockaddr_in 	phpd_my_addr;
+struct sockaddr_in	phpd_their_addr;
+socklen_t 		phpd_sin_size;
+int 			phpd_yes=1, phpd_backlog=1024;
+static char		*phpd_error_string;
+static char 		*phpd_passphrase = NULL;
+static char 		*phpd_certfile = NULL;
+static SSL_CTX 		*phpd_ssl_ctx;
+static SSL		*phpd_ssl;
+
 //ZEND_BEGIN_MODULE_GLOBALS(phpd)
-	int 		phpd_server_fd, phpd_client_fd;
-	struct sockaddr_in phpd_my_addr;
-	struct sockaddr_in phpd_their_addr;
-	socklen_t 	phpd_sin_size;
-	int 		phpd_yes=1, phpd_backlog=1024;
-
-	static char	*phpd_error_string;
-	static char 	*phpd_passphrase = NULL;
-	static char 	*phpd_certfile = NULL;
-	static SSL_CTX 	*phpd_ssl_ctx;
-	static SSL	*phpd_ssl;
 //ZEND_END_MODULE_GLOBALS(phpd)
 
-int pem_passwd_cb(char *buf, int size, int rwflag, void *data)
+int phpd_pem_passwd_cb(char *buf, int size, int rwflag, void *data)
 {
 	if(phpd_passphrase != NULL)
 	{

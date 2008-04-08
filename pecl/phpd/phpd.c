@@ -47,6 +47,7 @@ zend_function_entry phpd_functions[] = {
 	PHP_FE(phpd_close,	NULL)
 	PHP_FE(phpd_shutdown,	NULL)
 	PHP_FE(phpd_error,	NULL)
+	PHP_FE(phpd_sendfile,	NULL)
 	{NULL, NULL, NULL}	/* Must be the last line in phpd_functions[] */
 };
 /* }}} */
@@ -183,7 +184,7 @@ PHP_FUNCTION(phpd_server)
 
 	phpd_ssl_ctx = SSL_CTX_new( SSLv23_server_method() );
 
-	SSL_CTX_set_default_passwd_cb(phpd_ssl_ctx, pem_passwd_cb);
+	SSL_CTX_set_default_passwd_cb(phpd_ssl_ctx, phpd_pem_passwd_cb);
 
 	if(!SSL_CTX_use_certificate_file(phpd_ssl_ctx, phpd_certfile, SSL_FILETYPE_PEM))
 	{
@@ -265,7 +266,7 @@ PHP_FUNCTION(phpd_accept)
 	phpd_ssl = SSL_new(phpd_ssl_ctx);
 	if(phpd_ssl==NULL)
 	{
-		phpd_error_set("phpd_accept(): SSL_new()");
+		phpd_error_set(ERR_error_string(ERR_get_error(), NULL));
 		RETURN_FALSE;
 	}
 
@@ -338,6 +339,7 @@ PHP_FUNCTION(phpd_write)
 	retval = SSL_write(phpd_ssl, str, length);
 
         if (retval < 0) {
+		phpd_error_set(ERR_error_string(ERR_get_error(), NULL));
                 RETURN_FALSE;
         }
 
@@ -381,6 +383,37 @@ PHP_FUNCTION(phpd_error)
 }
 /* }}} */
 
+/* {{{ proto  phpd_sendfile()
+    */
+PHP_FUNCTION(phpd_sendfile)
+{
+	// this function is most likely really dangerous and massively pointless in a world where thttpd exists.
+	int	file, retval, str_len, buff;
+	long	length;
+	char	*filename;
+	struct stat fileinfo;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|l", &filename, &str_len, &length) == FAILURE) {
+                return;
+        }
+
+        if (ZEND_NUM_ARGS() < 2) {
+                length = str_len;
+        }
+
+	file = open(filename, O_RDONLY);
+	fstat(file, &fileinfo);
+
+	buff = mmap(0, fileinfo.st_size, PROT_READ, MAP_SHARED, file, 0);
+
+	retval = SSL_write(phpd_ssl, buff, fileinfo.st_size);
+
+	//we can't AFAIK do this over SSL_write
+	//sendfile(phpd_client_fd, file, 0, fileinfo.st_size);
+
+        RETURN_LONG(retval);
+}
+/* }}} */
 
 /*
  * Local variables:

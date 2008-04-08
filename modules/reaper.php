@@ -20,7 +20,7 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-class Phpd_Module_Killer implements Phpd_Module
+class Phpd_Module_Reaper implements Phpd_Module
 {
 	public $phpd;
 	private $calls = 0;
@@ -33,7 +33,7 @@ class Phpd_Module_Killer implements Phpd_Module
 
 	public function request()
 	{
-		set_time_limit($this->phpd->reg->get('_phpd.module.Killer.timeout'));
+		set_time_limit($this->phpd->reg->get('_phpd.module.Reaper.timeout'));
 		return TRUE;
 	}
 
@@ -46,9 +46,9 @@ class Phpd_Module_Killer implements Phpd_Module
 	{
 		set_time_limit(0);
 
-		if($this->phpd->reg->exists('_phpd.module.Killer.requests'))
+		if($this->phpd->reg->exists('_phpd.module.Reaper.requests'))
 		{
-			if($this->calls >= $this->phpd->reg->get('_phpd.module.Killer.requests'))
+			if($this->calls >= $this->phpd->reg->get('_phpd.module.Reaper.requests'))
 			{
 				$this->phpd->shutdown = TRUE;
 			}
@@ -59,7 +59,7 @@ class Phpd_Module_Killer implements Phpd_Module
 		}
 		else if(!$this->logPointless)
 		{
-			$this->phpd->log->write("You have the killer module loaded but do not have '_phpd.module.Killer.requests' set.  This means this module is wasting CPU time."); 
+			$this->phpd->log->write("You have the Reaper module loaded but do not have '_phpd.module.Reaper.requests' set.  This means this module is wasting CPU time."); 
 			$this->logPointless = TRUE;
 		}
 		return TRUE;
