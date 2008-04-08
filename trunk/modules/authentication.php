@@ -20,7 +20,7 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-class Phpd_Module_Auth implements Phpd_Module
+class Phpd_Module_Authentication implements Phpd_Module
 {
 	public $phpd;
 
