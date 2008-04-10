@@ -106,9 +106,10 @@ class Phpd_Transport_Phpd implements Phpd_Transport
 		}
 		else
 		{
+			/* remeber we ping the ssl port */
 			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
 			{
-				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
+				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.ssl.port'), $errno, $errstr, 2);
 			}
 		}
 	}
