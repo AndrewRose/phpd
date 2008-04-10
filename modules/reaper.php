@@ -28,6 +28,7 @@ class Phpd_Module_Reaper implements Phpd_Module
 
 	public function init()
 	{
+		$this->phpd->reg->set('_phpd.module.Reaper.calls', 0);
 		return TRUE;
 	}
 
@@ -51,17 +52,15 @@ class Phpd_Module_Reaper implements Phpd_Module
 			if($this->calls >= $this->phpd->reg->get('_phpd.module.Reaper.requests'))
 			{
 				$this->phpd->shutdown = TRUE;
+				$this->phpd->reg->inc('_phpd.module.Reaper.calls');
 			}
 			else
 			{
 				$this->calls++;
+				$this->phpd->reg->inc('_phpd.module.Reaper.calls');
 			}
 		}
-		else if(!$this->logPointless)
-		{
-			$this->phpd->log->write("You have the Reaper module loaded but do not have '_phpd.module.Reaper.requests' set.  This means this module is wasting CPU time."); 
-			$this->logPointless = TRUE;
-		}
+
 		return TRUE;
 	}
 

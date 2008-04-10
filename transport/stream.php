@@ -96,9 +96,18 @@ class Phpd_Transport_Stream implements Phpd_Transport
 		}
 		else
 		{
+			if($this->phpd->reg->true('_phpd.ssl.on'))
+			{
+				$port = $this->phpd->reg->get('_phpd.ssl.port');
+			}
+			else
+			{
+				$port = $this->phpd->reg->get('_phpd.port');
+			}
+
 			for($i = $this->phpd->reg->get('_phpd.preFork'); $i; $i--)
 			{
-				@fsockopen($this->phpd->reg->get('_phpd.address'), $this->phpd->reg->get('_phpd.port'), $errno, $errstr, 2);
+				@fsockopen($this->phpd->reg->get('_phpd.address'), $port, $errno, $errstr, 2);
 			}
 		}
 	}
