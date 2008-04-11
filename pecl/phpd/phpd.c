@@ -260,7 +260,6 @@ PHP_FUNCTION(phpd_set)
 PHP_FUNCTION(phpd_accept)
 {
 	phpd_sin_size = sizeof phpd_their_addr;
-
 	phpd_client_fd = accept(phpd_server_fd, (struct sockaddr *)&phpd_their_addr, &phpd_sin_size);
 
 	phpd_ssl = SSL_new(phpd_ssl_ctx);
@@ -353,6 +352,7 @@ PHP_FUNCTION(phpd_close)
 {
 	close(phpd_client_fd);
 	SSL_shutdown(phpd_ssl);
+	SSL_free(phpd_ssl);
 }
 /* }}} */
 

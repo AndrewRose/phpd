@@ -95,26 +95,6 @@ class Phpd_Child extends Aplc_Daemon_Child
 	{
 		$this->log->write('Startup was a success! Awaiting connections.');
 
-		/* this was done before the fork and copied in but that ment the inability to "killall -HUP" and reset things so it is back here */
-		if($this->reg->exists('_phpd.moduleLocation,_phpd.moduleLoadOrder'))
-		{
-			$modules = explode(',',$this->reg->get('_phpd.moduleLoadOrder'));
-			if(is_array($modules))
-			{
-				foreach($modules as $module)
-				{
-					$class = 'Phpd_Module_'.$module;
-					$this->modules[$module] = new $class;
-					$this->modules[$module]->phpd = $this;
-					if(!$this->modules[$module]->init())
-					{
-						$this->log->write('Unable to init module: '.$module);
-						exit();
-					}
-				}
-			}
-		}
-
 		while(1)
 		{
 			if($this->transport->request())
@@ -239,6 +219,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 class Phpd extends Aplc_Daemon
 {
 	public $transport;
+	public $phpd;
 
 	public function start()
 	{
@@ -261,13 +242,12 @@ class Phpd extends Aplc_Daemon
 			exit('Unable to start '.$this->reg->get('_phpd.transport')." transport\n");
 		}
 
-		/* create child instance and setup its environment from which all new instances will be created */
-		$phpd = new Phpd_Child;
-			/* we want to keep the parent transport intact as we will be changing stuff by reference laters we clone now. */
-		$phpd->transport = clone $this->transport;
-		$phpd->transport->phpd = $phpd;
-		$phpd->reg = $this->reg;
-		/* */
+		$this->phpd = new Phpd_Child;
+		/* we want to keep the parent transport intact as we will be changing stuff by reference laters we clone now. */
+		$this->phpd->transport = clone $this->transport;
+		$this->phpd->transport->phpd = $this->phpd;
+		$this->phpd->reg = $this->reg;
+		$this->initChildInstance();
 
 		/* override _aplc.Daemon.maxFork with our preFork setting */
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
@@ -278,7 +258,7 @@ class Phpd extends Aplc_Daemon
 			{
 				return TRUE;
 			}
-			$this->child($phpd);
+			$this->child($this->phpd);
 		}
 
 /* todo: move module deinit() here */
@@ -292,6 +272,37 @@ class Phpd extends Aplc_Daemon
 		$this->transport->deinit(TRUE);
 		$this->initRegistry();
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
+		$this->initChildInstance();
+	}
+
+	public function initChildInstance()
+	{
+		/* this was done before the fork and copied in but that ment the inability to "killall -HUP" and reset things so it is back here */
+		if($this->reg->exists('_phpd.moduleLocation,_phpd.moduleLoadOrder'))
+		{
+			$modules = explode(',',$this->reg->get('_phpd.moduleLoadOrder'));
+			if(is_array($modules))
+			{
+				foreach($modules as $module)
+				{
+					$class = 'Phpd_Module_'.$module;
+
+					if(isset($this->phpd->modules[$module]))
+					{
+						$this->phpd->modules[$module]->deinit();
+						unset($this->phpd->modules[$module]);
+					}
+
+					$this->phpd->modules[$module] = new $class;
+					$this->phpd->modules[$module]->phpd = $this->phpd;
+					if(!$this->phpd->modules[$module]->init())
+					{
+						$this->log->write('Unable to init module: '.$module);
+						exit();
+					}
+				}
+			}
+		}
 	}
 
 	public function shutdown()
