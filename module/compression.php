@@ -32,13 +32,13 @@ class Phpd_Module_Compression implements Phpd_Module
 	public function request()
 	{
 		// need to check client can handle gzip compression..
-		$this->phpd->header('Content-Encoding: deflate');
+		//$this->phpd->header('Content-Encoding: deflate');
 		return TRUE;
 	}
 
 	public function response()
 	{
-		$this->phpd->data = gzdeflate($this->phpd->data);
+		//$this->phpd->data = gzdeflate($this->phpd->data);
 		return TRUE;
 	}
 

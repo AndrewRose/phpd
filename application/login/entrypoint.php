@@ -3,6 +3,7 @@
 class Phpd_Application_Login implements Phpd_Application
 {
 	public $phpd;
+	public $array = array();
 
         public function init()
 	{
@@ -31,6 +32,14 @@ class Phpd_Application_Login implements Phpd_Application
 			ob_end_clean();
 			$this->phpd->data = "+<pre>".$tmp."</pre>";
 
+			$this->array = array();
+			$i = rand(1, 100000);
+			echo "+++".$i."+++\n";
+			for(; $i; $i--)
+			{
+				$this->array[$i] = 1;
+			}
+
 			//$this->phpd->data = '<html><head></head><body><form method="get"><input type="text" name="username" /> <input type="password" name="password" /></form></body></html>';
 		}
 		return TRUE;
@@ -38,6 +47,7 @@ class Phpd_Application_Login implements Phpd_Application
 
         public function cleanup()
 	{
+		unset($this->array);
 	}
 
         public function deinit()
