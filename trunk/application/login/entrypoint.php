@@ -1,6 +1,6 @@
 <?php
 
-class login implements Phpd_Application
+class Phpd_Application_Login implements Phpd_Application
 {
 	public $phpd;
 

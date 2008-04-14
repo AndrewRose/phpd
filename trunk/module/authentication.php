@@ -20,28 +20,26 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-class Phpd_Module_Gc implements Phpd_Module
+class Phpd_Module_Authentication implements Phpd_Module
 {
 	public $phpd;
 
         public function init()
         {
-		/* gc check from: http://code.google.com/p/appserver-in-php/ */
-		if (ini_get('zend.enable_gc') === '')
+		if(!$this->phpd->reg->exists('_phpd.module.Authentication.application'))
 		{
-			echo "WARNING: This version of PHP is compiled without GC-support!\n";
+			$this->phpd->log->write('No default application set for Authentication module!');
 			return FALSE;
 		}
-		else if(ini_get('zend.enable_gc') === '0')
-		{
-			ini_set('zend.enable_gc', true);
-		}
-
 		return TRUE;
         }
 
         public function request()
         {
+		if(!$this->phpd->reg->exists('_phpd.user.application'))
+		{
+			$this->phpd->reg->set('_phpd.user.application', $this->phpd->reg->get('_phpd.module.Authentication.application'));
+		}
 		return TRUE;
         }
 
@@ -52,7 +50,6 @@ class Phpd_Module_Gc implements Phpd_Module
 
         public function cleanup()
         {
-		gc_collect_cycles();
 		return TRUE;
         }
 

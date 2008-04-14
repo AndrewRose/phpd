@@ -20,12 +20,25 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-class Phpd_Module_Authentication implements Phpd_Module
+class Phpd_Module_Gc implements Phpd_Module
 {
 	public $phpd;
+	public $enabled = FALSE;
 
         public function init()
         {
+		/* gc check from: http://code.google.com/p/appserver-in-php/ */
+		if(false === function_exists('gc_enabled'))
+		{
+			echo "WARNING: This version of PHP is compiled without GC-support!  Be aware of possible memory leaks.\n";
+			$this->enabled = FALSE;
+		}
+		else if (gc_enabled() === false)
+		{
+			$this->enabled = TRUE;
+			gc_enable();
+		}
+
 		return TRUE;
         }
 
@@ -41,6 +54,10 @@ class Phpd_Module_Authentication implements Phpd_Module
 
         public function cleanup()
         {
+		if($this->enabled)
+		{
+			gc_collect_cycles();
+		}
 		return TRUE;
         }
 
