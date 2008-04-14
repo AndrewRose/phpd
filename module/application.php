@@ -29,35 +29,23 @@ interface Phpd_Application
         public function deinit();
 }
 
-class Phpd_Module_Response implements Phpd_Module
+class Phpd_Module_Application implements Phpd_Module
 {
 	public $phpd;
-	private $application=FALSE;
+	private $application = FALSE;
+	private $applications = array();
 
 	public function init()
 	{
-		if($this->phpd->reg->exists('_phpd.module.Response.applicationRoot,_phpd.module.Response.defaultApplication'))
+		if($this->phpd->reg->exists('_phpd.module.Application.load'))
 		{
-			$application = $this->phpd->reg->get('_phpd.module.Response.defaultApplication');
-			$entryPoint = $this->phpd->reg->get('_phpd.module.Response.applicationRoot').$application.'/entrypoint.php';
-			if(is_file($entryPoint))
+			$applications = explode(',',$this->phpd->reg->get('_phpd.module.Application.load'));
+			foreach($applications as $application)
 			{
-				require_once($entryPoint);
-				$this->application = new $application;
-				$this->application->phpd = $this->phpd;
-
-				if($this->application instanceof Phpd_Application)
-				{
-					$this->application->init($this->phpd); return TRUE;
-				}
-				else
-				{
-					$this->phpd->log->write("Failed to start application as it is not an instance of Phpd_Application!");
-				}
-			}
-			else
-			{
-				$this->phpd->log->write("Failed to start application as I could not find the entrypoint: ".$entrypoint);
+				$class = 'Phpd_Application_'.$application;
+				$this->applications[$application] = new $class;
+				$this->applications[$application]->phpd = $this->phpd;
+				$this->applications[$application]->init();
 			}
 		}
 
@@ -66,38 +54,41 @@ class Phpd_Module_Response implements Phpd_Module
 
 	public function request()
 	{
-		if($this->application)
+		if($this->phpd->reg->exists('_phpd.user.application'))
 		{
-			$this->application->request($this->phpd);
+			$this->application = $this->phpd->reg->get('_phpd.user.application');
 		}
+		else
+		{
+			$this->phpd->status = 500;
+			return FALSE;
+		}
+
+		$this->applications[$this->application]->request();
 		return TRUE;
 	}
 
 	public function response()
 	{
-		if($this->application)
-		{
-			$this->application->response($this->phpd);
-		}
+		$this->applications[$this->application]->response();
 		return TRUE;
 	}
 
 	public function cleanup()
 	{
-		if($this->application)
-		{
-			$this->application->cleanup($this->phpd);
-		}
+		$this->applications[$this->application]->cleanup();
+		$this->application = FALSE;
 		return TRUE;
 	}
 
 	public function deinit()
 	{
-		if($this->application)
+		foreach($this->applications as $name => $instance)
 		{
-			$this->application->deinit($this->phpd);
-			unset($this->application);
+			$instance->deinit();
+			unset($this->applications[$name]);
 		}
+		unset($this->applications);
 		return TRUE;
 	}
 }

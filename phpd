@@ -31,10 +31,6 @@ define('INICONF', 'phpd.ini');
 set_time_limit(0);
 declare(ticks = 1);
 
-require_once('transport/stream.php');
-require_once('transport/socket.php');
-require_once('transport/phpd.php');
-
 require_once('/usr/lib/aplc/Aplc.php');
 Aplc::setupAutoloader();
 
@@ -47,10 +43,29 @@ class Phpd_Autoloader implements Aplc_Autoloader
 
 	public function loader($className)
 	{
-		$file = 'modules/' . strtolower(str_replace('_', '', str_replace('Phpd_Module', '', $className))) . '.php';
+		/* check module/ */
+		$file = 'module/' . strtolower(str_replace('_', '', str_replace('Phpd_Module', '', $className))) . '.php';
 		if (file_exists($file))
 		{
 			require_once $file;
+			return;
+		}
+
+		/* check transport/ */
+		$file = 'transport/' . strtolower(str_replace('_', '', str_replace('Phpd_Transport', '', $className))) . '.php';
+		if(file_exists($file))
+		{
+			require_once $file;
+			return;
+		}
+
+		/* check application/ */
+		$file = 'application/' . strtolower(str_replace('Phpd_Application_', '', $className)) . '/entrypoint.php';
+
+		if(file_exists($file))
+		{
+			require_once $file;
+			return;
 		}
 	}
 }
