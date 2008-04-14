@@ -37,11 +37,22 @@ create table core_profile(
 class Phpd_Module_Profiler implements Phpd_Module
 {
 	public $phpd;
+	private $db;	
 	private $time_start, $time_end, $time_total;
 	private $memory_start, $memory_end, $memory_total, $memory_peak;
 
         public function init()
         {
+		if($this->phpd->reg->exists('_phpd.module.Profiler.database.instance'))
+		{
+			$this->db = $this->phpd->reg->get('_phpd.module.Profiler.database.instance');
+		}
+		else
+		{
+			$this->phpd->log->write('Unable to start profiler as no database instance passed.');
+			return FALSE;
+		}
+		
 		return TRUE;
         }
 
@@ -66,7 +77,7 @@ class Phpd_Module_Profiler implements Phpd_Module
 		$this->time_end = $this->microtime_float();
 		$this->time_total = $this->time_end - $this->time_start;
 
-		$query = "insert into core_profiler(
+		$query = "insert into core_profile(
 				time_start,
 				time_end,
 				time_total,
@@ -84,7 +95,7 @@ class Phpd_Module_Profiler implements Phpd_Module
 				'".$this->memory_peak."'
 			);";
 
-//echo $query."\n";
+		$this->db->query($query);
 
 		return TRUE;
         }

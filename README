@@ -1,0 +1,40 @@
+phpd Copyright (C) 2007, 2008 Andrew Rose (rose.andrew@gmail.com)
+
+For upto date information / support, try:
+
+ http://andrew-rose.blogspot.com/search/label/phpd
+ http://phpd.googlecode.com
+ phpd-general@googlegroups.com
+ http://groups.google.com/group/phpd-general
+
+Install information is located on the homepage at googlecode.
+
+phpd uses the APLC Daemon stack.  This allows phpd to spawn multiple child
+instances to handle http(s) requests and is like Apaches prefork MPM except
+no threading goes on because PHP does not support it.
+
+phpd revolves around the APLC Registry which is the central point of call
+for storing all stateful information.  Think of it as $_SESSION on
+steroids.
+
+
+The modules are loaded in the child instance instead of being preloaded in the
+parent for two reasons:
+
+1. Resources like MySQL connections won't work as expected when forked and used in
+   the child processes.  This is due to the fact the child processes will use the 
+   same connection id as the parent.
+
+2. Sending a `killall -HUP phpd` will not work as expected.  Because the parent
+   image will already have source files loaded and new instances will not pick up
+   changes in the modules, applications etc..  Only the transport will remain the
+   same.
+
+Some downsides.
+
+1. Because the modules have to be loaded for each child instance (preforks),
+   errors / log messages will likely appear multiple times.  There is / will
+   be code in place to suppress this.
+
+2. Will take a little longer to startup but unless your superman or your
+   machine is from pre 80186 period, you will not notice.
