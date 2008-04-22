@@ -40,6 +40,15 @@ class Phpd_Module_Authentication implements Phpd_Module
 		{
 			$this->phpd->reg->set('_phpd.user.application', $this->phpd->reg->get('_phpd.module.Authentication.application'));
 		}
+
+		if( $this->phpd->reg->get('_phpd.module.Authentication.application') == $this->phpd->reg->get('_phpd.user.application') )
+		{
+			if(isset($_GET['username']) && isset($_GET['password']))
+			{
+				
+			}
+		}
+
 		return TRUE;
         }
 

@@ -86,6 +86,7 @@ class Phpd_Module_Request implements Phpd_Module
 			case 'POST':
 			{
 				$method = 'POST';
+				$_SERVER['POST_DATA'] = $parts[1];
 			}
 			break;
 			default:

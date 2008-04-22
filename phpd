@@ -51,14 +51,6 @@ class Phpd_Autoloader implements Aplc_Autoloader
 			return;
 		}
 
-		/* check transport/ */
-		$file = 'transport/' . strtolower(str_replace('_', '', str_replace('Phpd_Transport', '', $className))) . '.php';
-		if(file_exists($file))
-		{
-			require_once $file;
-			return;
-		}
-
 		/* check application/ */
 		$file = 'application/' . strtolower(str_replace('Phpd_Application_', '', $className)) . '/entrypoint.php';
 
@@ -76,14 +68,6 @@ interface Phpd_Module
 	public function request();
 	public function response();
 	public function cleanup();
-	public function deinit();
-}
-
-interface Phpd_Transport
-{
-	public function init();
-	public function request();
-	public function response();
 	public function deinit();
 }
 
@@ -138,7 +122,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 		while(1)
 		{
-			if($this->transport->request())
+			if(($this->request = $this->transport->request()))
 			{
 				if($this->pokeModules('request'))
 				{
@@ -166,7 +150,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 				$headers = $this->headers($this->status, $this->statusCodes[$this->status], strlen($this->data));
 				$this->response = (string)$headers.$this->data;
 
-				$this->transport->response();
+				$this->transport->response($this->response);
 
 				$this->pokeModules('cleanup'); // module cleanup
 				$this->cleanup(); // phpd cleanup
@@ -192,7 +176,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 			{
 				/* I've left out any function exists checks as it is implied in the module
 				interface.. plus it wastes cpu cycles. */
-				if(!$module->$action())
+				if(!$module->$action() && !$this->shutdown)
 				{
 					$this->log->write('Failed to poke module: '.$name.', with action: '.$action);
 					return FALSE;
@@ -251,7 +235,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function shutdown()
 	{
-		$this->transport->deinit(FALSE);
+		$this->transport->deinit();
 		$this->modules = array_reverse($this->modules, TRUE);
 		$this->pokeModules('deinit');
 	}
@@ -270,7 +254,7 @@ class Phpd extends Aplc_Daemon
 		}
 		else
 		{
-			$class = 'Phpd_Transport_'.$this->reg->get('_phpd.transport');
+			$class = 'Aplc_Transport_'.$this->reg->get('_phpd.transport');
 			$this->transport = new $class;
 			$this->transport->phpd = $this;
 		}
@@ -278,7 +262,7 @@ class Phpd extends Aplc_Daemon
 		$this->initLog();
 		$this->childRespawn = TRUE;
 
-		if(!$this->transport->init())
+		if(!$this->transport->init($this->reg->getReference('_phpd')))
 		{
 			exit('Unable to start '.$this->reg->get('_phpd.transport')." transport\n");
 		}
@@ -309,14 +293,29 @@ class Phpd extends Aplc_Daemon
 	{
 		// we ask the transport to deinit as a parent which will poke the forked processes.
 		// we have to skip the parent socket shutdown.. needs fixing.. mayube another flag?
-		$this->transport->deinit(TRUE);
+		$this->transport->deinit();
 		$this->initRegistry();
 		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
 	}
 
 	public function shutdown()
 	{
-		$this->transport->deinit(TRUE);
+		/* we ping the child processes to push them out of the blocking state they may be in */
+		if($this->reg->true('_phpd.ssl.on'))
+		{
+			$port = $this->reg->get('_phpd.ssl.port');
+		}
+		else
+		{
+			$port = $this->reg->get('_phpd.port');
+		}
+
+		for($i = $this->reg->get('_phpd.preFork'); $i; $i--)
+		{
+			@fsockopen($this->reg->get('_phpd.address'), $port, $errno, $errstr, 2);
+		}
+
+		$this->transport->deinit();
 		$this->waitChildren();
 	}
 }

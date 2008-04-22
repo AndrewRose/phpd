@@ -9,6 +9,11 @@ For upto date information / support, try:
 
 Install information is located on the homepage at googlecode.
 
+
+
+***The rest of this README is just a placeholder for now and contains
+nothing more than my wandering thoughts***
+
 phpd uses the APLC Daemon stack.  This allows phpd to spawn multiple child
 instances to handle http(s) requests and is like Apaches prefork MPM except
 no threading goes on because PHP does not support it.
@@ -21,20 +26,78 @@ steroids.
 The modules are loaded in the child instance instead of being preloaded in the
 parent for two reasons:
 
-1. Resources like MySQL connections won't work as expected when forked and used in
-   the child processes.  This is due to the fact the child processes will use the 
-   same connection id as the parent.
+1. Resources like MySQL connections won't work as expected when forked and
+   used in the child processes.  This is due to the fact the child processes
+   will use the same connection id as the parent.
 
-2. Sending a `killall -HUP phpd` will not work as expected.  Because the parent
-   image will already have source files loaded and new instances will not pick up
-   changes in the modules, applications etc..  Only the transport will remain the
-   same.
+2. Sending a `killall -HUP phpd` will not work as expected.  Because the
+   parent image will already have source files loaded and new instances will
+   not pick up changes in the modules, applications etc..  The transport will
+   remain the same irregardless.
 
 Some downsides.
 
 1. Because the modules have to be loaded for each child instance (preforks),
-   errors / log messages will likely appear multiple times.  There is / will
+   errors / log messages will appear 1*preFork times.  There is / will
    be code in place to suppress this.
 
 2. Will take a little longer to startup but unless your superman or your
    machine is from pre 80186 period, you will not notice.
+
+
+Developing Applications
+
+Always create new database connections in Phpd_Application::init().  Never
+reuse the _phpd.database.local instance and change the database for example
+as this will break the backend.
+
+Never, ever use dynamicly generated registry paths.  Always use static
+paths and static path / variable or static key combinations to access
+members. e.g.
+
+$this->reg->get('path.'.$_GET['somevar']); // BAD
+$this->reg->kget('path', $_GET['somevar']); // GOOD
+$this->reg->get('path.to.some.var'); // GOOD
+
+
+Performance thoughts on preforking vs threads
+
+From the tests I've done so far it seems that threads and forking when
+looked at from a performance point of view are merely different ways of
+cutting the same cake (/me ducks).
+
+With preforking you have a set number of processes handling requests.
+With threading you tend to answer everyone you can which increases server
+load and slows down earlier requests.
+
+With phpd requests are handled more or less on a first come first served
+basis.  At the end of the day the server can only process so many
+connections and the more you service at once the slower the responses
+to the clients becomes.
+
+
+Application directory structure.
+
+In the root phpd directory there is an applications directory.  In this
+directory are the different applications and moving into one should
+show the following directories:
+
+classes/
+ This is used to store any application specific class that is not a
+ business object(model).
+
+contexts/
+ The contexts directory is where the main user groups are defined.
+ i.e. guest/ staff/ clients/
+ 
+controllers/
+ All module controllers are defined here.
+
+entrypoint.php
+ The main entry point for the application a.k.a front controller.
+
+models/
+ All business objects here.
+
+templates/
+ All re-usable templates (views) here.

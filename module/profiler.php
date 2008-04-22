@@ -26,7 +26,8 @@ create table core_profile(
  uri text,
  time_start int,
  time_end int,
- time_total int,
+ time_seconds int,
+ time_useconds float,
  memory_start int,
  memory_end int,
  memory_total int,
@@ -38,11 +39,16 @@ class Phpd_Module_Profiler implements Phpd_Module
 {
 	public $phpd;
 	private $db;	
-	private $time_start, $time_end, $time_total;
+	private $time_start, $time_end, $time_seconds, $time_useconds;
 	private $memory_start, $memory_end, $memory_total, $memory_peak;
 
         public function init()
         {
+		if(!strstr($this->phpd->reg->get('_phpd.moduleLoadOrder'), 'Gc') || !function_exists('gc_enable'))
+		{
+			$this->phpd->log->write("The Gc module is not loaded or this version of PHP does not have the GC patch.  The profiler memory usage stats will be unreliable.");
+		}
+
 		if($this->phpd->reg->exists('_phpd.module.Profiler.database.instance'))
 		{
 			$this->db = $this->phpd->reg->get('_phpd.module.Profiler.database.instance');
@@ -75,12 +81,14 @@ class Phpd_Module_Profiler implements Phpd_Module
 		$this->memory_total = $this->memory_end - $this->memory_start;
 
 		$this->time_end = $this->microtime_float();
-		$this->time_total = $this->time_end - $this->time_start;
+		$this->time_seconds = $this->time_end - $this->time_start;
+		$this->time_useconds = $this->time_end - $this->time_start;
 
 		$query = "insert into core_profile(
 				time_start,
 				time_end,
-				time_total,
+				time_seconds,
+				time_useconds,
 				memory_start,
 				memory_end,
 				memory_total,
@@ -88,7 +96,8 @@ class Phpd_Module_Profiler implements Phpd_Module
 			) values (
 				'".$this->time_start."',
 				'".$this->time_end."',
-				'".$this->time_total."',
+				'".$this->time_seconds."',
+				'".$this->time_useconds."',
 				'".$this->memory_start."',
 				'".$this->memory_end."',
 				'".$this->memory_total."',

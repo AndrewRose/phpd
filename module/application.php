@@ -60,23 +60,28 @@ class Phpd_Module_Application implements Phpd_Module
 		}
 		else
 		{
-			$this->phpd->status = 500;
-			return FALSE;
+			//$this->phpd->status = 500;
+			//return FALSE;
 		}
 
-		$this->applications[$this->application]->request();
-		return TRUE;
+		return $this->applications[$this->application]->request();
 	}
 
 	public function response()
 	{
-		$this->applications[$this->application]->response();
+		if($this->application)
+		{
+			$this->applications[$this->application]->response();
+		}
 		return TRUE;
 	}
 
 	public function cleanup()
 	{
-		$this->applications[$this->application]->cleanup();
+		if($this->application)
+		{
+			$this->applications[$this->application]->cleanup();
+		}
 		$this->application = FALSE;
 		return TRUE;
 	}
