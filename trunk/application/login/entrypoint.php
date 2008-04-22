@@ -20,6 +20,8 @@ class Phpd_Application_Login implements Phpd_Application
 		{
 			
 		}		
+
+		return TRUE;
 	}
 
         public function response()
@@ -31,6 +33,8 @@ class Phpd_Application_Login implements Phpd_Application
 			$tmp = ob_get_contents();
 			ob_end_clean();
 			$this->phpd->data = "+<pre>".$tmp."</pre>";
+
+			//$this->phpd->data = "testing";
 
 			/*$this->array = array();
 			$i = rand(1, 100000);

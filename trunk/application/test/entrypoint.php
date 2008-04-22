@@ -9,7 +9,7 @@ class Phpd_Application_Test implements Phpd_Application
         public function init()
 	{
 		$this->db = $this->phpd->reg->get('_phpd.module.Database.local.instance', TRUE);
-		$this->db->database('iris');
+// create new database instances here don't change the local instance.
 	}
 
 	public function request()
@@ -30,6 +30,7 @@ class Phpd_Application_Test implements Phpd_Application
 		//$ret .= 'And the count in iris_students is: '.$row['count'];
 
 		$this->phpd->data = $ret;
+		return TRUE;
 	}
 
         public function cleanup()

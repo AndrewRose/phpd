@@ -30,7 +30,7 @@ class Phpd_Module_Gc implements Phpd_Module
 		/* gc check from: http://code.google.com/p/appserver-in-php/ */
 		if(false === function_exists('gc_enabled'))
 		{
-			echo "WARNING: This version of PHP is compiled without GC-support!  Be aware of possible memory leaks.\n";
+			$this->phpd->log->write("WARNING: This version of PHP is compiled without GC-support!  Be aware of possible memory leaks.");
 			$this->enabled = FALSE;
 		}
 		else if (gc_enabled() === false)
