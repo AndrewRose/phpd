@@ -21,15 +21,22 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+define('APLCROOT', '/usr/lib/aplc/');
+define('INICONF', 'phpd.ini');
+
+
 if(php_sapi_name() != 'cli')
 {
 	exit("phpd will only work (predictably) using the CLI SAPI\n");
 }
 
-define('INICONF', 'phpd.ini');
-
 set_time_limit(0);
 declare(ticks = 1);
+
+if(!file_exists(APLCROOT.'/Aplc.php'))
+{
+	exit("Unable to open APLC library\n");
+}
 
 require_once('/usr/lib/aplc/Aplc.php');
 Aplc::setupAutoloader();
@@ -92,33 +99,49 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public function start()
 	{
-		$this->log->write('Startup was a success! Awaiting connections.');
-
 		if($this->reg->exists('_phpd.moduleLocation,_phpd.moduleLoadOrder'))
 		{
+			$moduleSkip = explode(',',$this->reg->get('_phpd.moduleSkip'));
 			$modules = explode(',',$this->reg->get('_phpd.moduleLoadOrder'));
 			if(is_array($modules))
 			{
 				foreach($modules as $module)
 				{
-					$class = 'Phpd_Module_'.$module;
-
-					if(isset($this->modules[$module]))
+					if(!in_array($module, $moduleSkip))
 					{
-						$this->modules[$module]->deinit();
-						unset($this->modules[$module]);
+						$class = 'Phpd_Module_'.$module;
+
+						if(isset($this->modules[$module]))
+						{
+							$this->modules[$module]->deinit();
+							unset($this->modules[$module]);
+						}
+
+						$this->modules[$module] = new $class;
+						$this->modules[$module]->phpd = $this;
+						if(!$this->modules[$module]->init())
+						{
+							$this->log->write('Unable to init module: '.$module);
+							$this->log->write('Halted.');
+							while(1)
+							{
+								if($this->shutdown)
+								{
+									return FALSE;
+								}
+								sleep(1);
+							}
+						}
 					}
-
-					$this->modules[$module] = new $class;
-					$this->modules[$module]->phpd = $this;
-					if(!$this->modules[$module]->init())
+					else
 					{
-						$this->log->write('Unable to init module: '.$module);
-						exit();
+						$this->log->write('Skipping module startup: '.$module);
 					}
 				}
 			}
 		}
+
+		$this->log->write('Startup was a success! Awaiting connections.');
 
 		while(1)
 		{
@@ -157,13 +180,13 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 				if($this->shutdown)
 				{
-					return;
+					return TRUE;
 				}
 			}
 
 			if($this->shutdown)
 			{
-				return;
+				return TRUE;
 			}
 		}
 	}
@@ -186,14 +209,7 @@ class Phpd_Child extends Aplc_Daemon_Child
                 catch(Aplc_Exception $e)
                 {
                         echo $e->getMessage();
-                        while(1)
-                        {
-                                if($this->shutdown)
-                                {
-                                        return;
-                                }
-                                sleep(1);
-                        }
+			return FALSE;
                 }
 
 		return TRUE;
@@ -233,6 +249,10 @@ class Phpd_Child extends Aplc_Daemon_Child
 		$this->shutdown = TRUE;
 	}
 
+	public function registryPoke()
+	{
+	}
+
 	public function shutdown()
 	{
 		$this->transport->deinit();
@@ -256,10 +276,9 @@ class Phpd extends Aplc_Daemon
 		{
 			$class = 'Aplc_Transport_'.$this->reg->get('_phpd.transport');
 			$this->transport = new $class;
-			$this->transport->phpd = $this;
+			$this->transport->log = $this->log;
 		}
 
-		$this->initLog();
 		$this->childRespawn = TRUE;
 
 		if(!$this->transport->init($this->reg->getReference('_phpd')))
@@ -271,10 +290,6 @@ class Phpd extends Aplc_Daemon
 		/* we want to keep the parent transport intact as we will be changing stuff by reference laters we clone now. */
 		$this->phpd->transport = clone $this->transport;
 		$this->phpd->transport->phpd = $this->phpd;
-		//$this->phpd->reg = $this->reg;
-
-		/* override _aplc.Daemon.maxFork with our preFork setting */
-		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
 
 		while(1)
 		{
@@ -282,11 +297,22 @@ class Phpd extends Aplc_Daemon
 			{
 				return TRUE;
 			}
-			$this->child($this->phpd);
+
+			if(!$this->child($this->phpd))
+			{
+				$this->log->write('Failed to fork child process!');
+				return FALSE;
+			}
 		}
 
 /* todo: move module deinit() here */
 		unset($phpd);
+	}
+
+	public function registryPoke()
+	{
+		/* override _aplc.Daemon.maxFork with our preFork setting */
+		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
 	}
 
 	public function reload()
@@ -295,7 +321,7 @@ class Phpd extends Aplc_Daemon
 		// we have to skip the parent socket shutdown.. needs fixing.. mayube another flag?
 		$this->transport->deinit();
 		$this->initRegistry();
-		$this->reg->set('_aplc.Daemon.maxFork', $this->reg->getOrSet('_phpd.preFork', FALSE, 1));
+		$this->registryPoke();
 	}
 
 	public function shutdown()

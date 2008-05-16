@@ -38,8 +38,8 @@ parent for two reasons:
 Some downsides.
 
 1. Because the modules have to be loaded for each child instance (preforks),
-   errors / log messages will appear 1*preFork times.  There is / will
-   be code in place to suppress this.
+   errors / log messages will appear 1*preFork times.  There is / will be code
+   in place to suppress this.
 
 2. Will take a little longer to startup but unless your superman or your
    machine is from pre 80186 period, you will not notice.
@@ -48,39 +48,38 @@ Some downsides.
 Developing Applications
 
 Always create new database connections in Phpd_Application::init().  Never
-reuse the _phpd.database.local instance and change the database for example
-as this will break the backend.
+reuse the _phpd.database.local instance and change the database for example as
+this will break the backend.
 
-Never, ever use dynamicly generated registry paths.  Always use static
-paths and static path / variable or static key combinations to access
-members. e.g.
+Never, ever use dynamicly generated registry paths.  Always use static paths
+and static path / variable or static key combinations to access members. e.g.
 
 $this->reg->get('path.'.$_GET['somevar']); // BAD
 $this->reg->kget('path', $_GET['somevar']); // GOOD
 $this->reg->get('path.to.some.var'); // GOOD
+$this->reg->kget('path.to.some.var', 'key'); // GOOD
 
 
 Performance thoughts on preforking vs threads
 
-From the tests I've done so far it seems that threads and forking when
-looked at from a performance point of view are merely different ways of
-cutting the same cake (/me ducks).
+From the tests I've done so far it seems that threads and forking when looked
+at from a performance point of view are merely different ways of cutting the
+same cake (/me ducks).
 
-With preforking you have a set number of processes handling requests.
-With threading you tend to answer everyone you can which increases server
-load and slows down earlier requests.
+With preforking you have a set number of processes handling requests.  With
+threading you tend to answer everyone you can which increases server load and
+slows down earlier requests.
 
-With phpd requests are handled more or less on a first come first served
-basis.  At the end of the day the server can only process so many
-connections and the more you service at once the slower the responses
-to the clients becomes.
+With phpd requests are handled more or less on a first come first served basis.
+At the end of the day the server can only process so many connections and the
+more you service at once the slower the responses to the clients becomes.
 
 
 Application directory structure.
 
 In the root phpd directory there is an applications directory.  In this
-directory are the different applications and moving into one should
-show the following directories:
+directory are the different applications and moving into one should show the
+following directories:
 
 classes/
  This is used to store any application specific class that is not a
@@ -91,7 +90,11 @@ contexts/
  i.e. guest/ staff/ clients/
  
 controllers/
- All module controllers are defined here.
+ All module controllers are defined here in there seperate context directories,
+for example taking the above contexts into account we have:
+ controllers/guest/
+ controllers/staff/
+ controllers/clients/ 
 
 entrypoint.php
  The main entry point for the application a.k.a front controller.
@@ -101,3 +104,42 @@ models/
 
 templates/
  All re-usable templates (views) here.
+
+An actual page is stored in the context.  So for example the login page for the
+login app is stored as:
+
+ contexts/guest/login/controller.php
+ contexts/guest/login/template.tpl
+
+
+Because phpd is persistent every page controller class must have a unique name.
+There are a few ways to handle this automatically.
+
+1. Allow the class to be called Controller for all pages.  When loading the
+source file(controller.php), tokenize and rewrite the controller name to
+something unique and pass in via eval.
+
+2. Write controller classes (in controller.php) without the class definition, i.e.
+
+public function init()
+{
+
+}
+
+instead of:
+
+class Controller
+{
+        public function init()
+        {
+
+        }
+}
+
+We simply read in the controller.php and wrap the contents with a unique
+controller class definition and load via eval.
+
+3. Write a patch for PHP that allows redeclaration of classes.
+
+For now I'm sticking with number 2.
+

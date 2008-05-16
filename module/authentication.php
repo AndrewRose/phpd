@@ -23,6 +23,7 @@
 class Phpd_Module_Authentication implements Phpd_Module
 {
 	public $phpd;
+	private $defaultApplication;
 
         public function init()
         {
@@ -31,22 +32,40 @@ class Phpd_Module_Authentication implements Phpd_Module
 			$this->phpd->log->write('No default application set for Authentication module!');
 			return FALSE;
 		}
+
+		$this->defaultApplication = $this->phpd->reg->get('_phpd.module.Authentication.application');
+
+		if(!$this->phpd->reg->exists('_phpd.module.Authentication.adaptor'))
+		{
+			$this->phpd->log->write('No default adaptor set for Authentication module!');
+			return FALSE;
+		}
+
+		$class = 'Aplc_Auth_Adaptor_'.$this->phpd->reg->get('_phpd.module.Authentication.adaptor');
+		if(!Aplc::classExists($class))
+		{
+			$this->phpd->log->write('Invalid Auth adaptor: '.$class);
+			return FALSE;
+		}
+
+		$this->auth = new $class;
+		$this->auth->init($this->phpd->reg->getReference('_phpd.module.Authentication'));
+
 		return TRUE;
         }
 
         public function request()
         {
-		if(!$this->phpd->reg->exists('_phpd.user.application'))
+		// if the user has no user object then set them as a guest
+		if(!$this->phpd->reg->exists('_phpd.user.id'))
 		{
-			$this->phpd->reg->set('_phpd.user.application', $this->phpd->reg->get('_phpd.module.Authentication.application'));
+			$this->phpd->reg->set('_phpd.user.id', 0);
+			$this->phpd->reg->set('_phpd.user.application', $this->defaultApplication);
 		}
 
-		if( $this->phpd->reg->get('_phpd.module.Authentication.application') == $this->phpd->reg->get('_phpd.user.application') )
+		if($this->phpd->reg->get('_phpd.module.Authentication.application') == $this->phpd->reg->get('_phpd.user.application') )
 		{
-			if(isset($_GET['username']) && isset($_GET['password']))
-			{
-				
-			}
+			$this->auth->authenticate();
 		}
 
 		return TRUE;
