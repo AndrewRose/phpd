@@ -45,6 +45,9 @@ class Phpd_Module_Session implements Phpd_Module
 		}
 
 		$this->session->init($this->phpd->reg->getReference('_phpd.module.Session.database'));
+
+		$this->phpd->reg->drop('_phpd.user');
+
 		return TRUE;
 	}
 
@@ -70,6 +73,17 @@ class Phpd_Module_Session implements Phpd_Module
 		}
 
 		@session_start();
+
+		// setup the user object for the authentication module which will be called next.
+		if(isset($_SESSION['_phpd']['user']))
+		{
+			$this->phpd->reg->import('_phpd.user', $_SESSION['_phpd']['user']);
+		}
+		else
+		{
+			$this->phpd->reg->set('_phpd.user', FALSE);
+		}
+
 		return TRUE;
 	}
 
@@ -80,9 +94,9 @@ class Phpd_Module_Session implements Phpd_Module
 
 	public function cleanup()
 	{
+		$_SESSION['_phpd']['user'] = $this->phpd->reg->dump('_phpd.user');
+		$this->phpd->reg->set('_phpd.user', FALSE);
 		session_write_close();
-		//session_destroy();
-		unset($_SESSION);
 		return TRUE;
 	}
 

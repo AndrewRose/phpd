@@ -20,46 +20,31 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-/* this module simply sets up any database connections specified in the ini: _phpd.module.Database */
-
-class Phpd_Module_Database implements Phpd_Module
+class Phpd_Module_Logging implements Phpd_Module
 {
 	public $phpd;
-	private $dbs = array();
-
+	
 	public function init()
 	{
-		if($this->phpd->reg->exists('_phpd.module.Database'))
+		if($this->phpd->reg->exists('_phpd.module.Logging'))
 		{
-			foreach($this->phpd->reg->get('_phpd.module.Database') as $database => $discard)
+			$this->log = new Aplc_Log;
+			if(!$this->log->init($this->phpd->reg->getReference('_phpd.module.Logging')))
 			{
-				$db = new Aplc_Db;
-				$db->log = $this->phpd->log;
-
-				if(!$db->init($this->phpd->reg->getReference('_phpd.module.Database.'.$database)))
-				{
-					$this->phpd->log->write('Unable to start database connection: '.$database);
-					return FALSE;
-				}
-
-				$this->dbs[] = $db; // save reference to making deinits life easier
-				$this->phpd->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
+				return FALSE;
 			}
 		}
-		else
-		{
-			// log wasted cpu time
-		}
-
 		return TRUE;
 	}
 
 	public function request()
 	{
-		foreach($this->dbs as $db)
-		{
-			$db->ping();
-		}
+/*
+example of Apache log entry:
+212.219.118.20 - - [09/May/2008:15:02:22 +0100] "GET /sys/js/lightbox2/js/effects.js HTTP/1.0" 200 31969 "https://portal.iris.ac/index.php?___sys_op___[]=link&___link___=144" "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; 
+SV1; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.04506.30)"
+*/
+                $this->log->write(date('d/m/Y'));
 		return TRUE;
 	}
 
@@ -75,10 +60,6 @@ class Phpd_Module_Database implements Phpd_Module
 
 	public function deinit()
 	{
-		foreach($this->dbs as $db)
-		{
-			$db->close();
-		}
 		return TRUE;
 	}
 }

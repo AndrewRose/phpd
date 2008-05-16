@@ -20,46 +20,17 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-/* this module simply sets up any database connections specified in the ini: _phpd.module.Database */
-
-class Phpd_Module_Database implements Phpd_Module
+class Phpd_Module_Cache implements Phpd_Module
 {
 	public $phpd;
-	private $dbs = array();
-
+	
 	public function init()
 	{
-		if($this->phpd->reg->exists('_phpd.module.Database'))
-		{
-			foreach($this->phpd->reg->get('_phpd.module.Database') as $database => $discard)
-			{
-				$db = new Aplc_Db;
-				$db->log = $this->phpd->log;
-
-				if(!$db->init($this->phpd->reg->getReference('_phpd.module.Database.'.$database)))
-				{
-					$this->phpd->log->write('Unable to start database connection: '.$database);
-					return FALSE;
-				}
-
-				$this->dbs[] = $db; // save reference to making deinits life easier
-				$this->phpd->reg->set('_phpd.module.Database.'.$database.'.instance', $db);
-			}
-		}
-		else
-		{
-			// log wasted cpu time
-		}
-
 		return TRUE;
 	}
 
 	public function request()
 	{
-		foreach($this->dbs as $db)
-		{
-			$db->ping();
-		}
 		return TRUE;
 	}
 
@@ -75,10 +46,6 @@ class Phpd_Module_Database implements Phpd_Module
 
 	public function deinit()
 	{
-		foreach($this->dbs as $db)
-		{
-			$db->close();
-		}
 		return TRUE;
 	}
 }

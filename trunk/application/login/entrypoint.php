@@ -12,15 +12,6 @@ class Phpd_Application_Login implements Phpd_Application
 
 	public function request()
 	{
-		if(isset($_GET['username']) && isset($_GET['password']))
-		{
-
-		}
-		else
-		{
-			
-		}		
-
 		return TRUE;
 	}
 

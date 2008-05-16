@@ -29,6 +29,15 @@ interface Phpd_Application
         public function deinit();
 }
 
+class Phpd_Application_Stub
+{
+        public function init(){return FALSE;}
+	public function request(){return FALSE;}
+        public function response(){return FALSE;}
+        public function cleanup(){return FALSE;}
+        public function deinit(){return FALSE;}
+}
+
 class Phpd_Module_Application implements Phpd_Module
 {
 	public $phpd;
@@ -54,35 +63,31 @@ class Phpd_Module_Application implements Phpd_Module
 
 	public function request()
 	{
-		if($this->phpd->reg->exists('_phpd.user.application'))
+		if($this->phpd->reg->exists('_phpd.user.application') && isset($this->applications[$this->phpd->reg->get('_phpd.user.application')]) )
 		{
-			$this->application = $this->phpd->reg->get('_phpd.user.application');
+			$this->application = $this->applications[$this->phpd->reg->get('_phpd.user.application')];
 		}
 		else
 		{
+			$this->application = new Phpd_Application_Stub;
 			//$this->phpd->status = 500;
 			//return FALSE;
 		}
 
-		return $this->applications[$this->application]->request();
+		$this->application->request();
+
+		return TRUE;
 	}
 
 	public function response()
 	{
-		if($this->application)
-		{
-			$this->applications[$this->application]->response();
-		}
+		$this->application->response();
 		return TRUE;
 	}
 
 	public function cleanup()
 	{
-		if($this->application)
-		{
-			$this->applications[$this->application]->cleanup();
-		}
-		$this->application = FALSE;
+		$this->application->cleanup();
 		return TRUE;
 	}
 
