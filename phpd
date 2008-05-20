@@ -81,13 +81,14 @@ interface Phpd_Module
 class Phpd_Child extends Aplc_Daemon_Child
 {
 	public $server = "phpd/1.0";
-	public $protocol = "HTTP/1.1";
+	public $protocol = "HTTP/1.0";
 	public $transport;
 	public $request;
 	public $response;
 	public $headers = array();
 	public $modules = array();
 	public $data = '';
+	public $http;
 
 	public $status = 200;
 	public $statusCodes = array(
@@ -145,8 +146,33 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 		while(1)
 		{
-			if(($this->request = $this->transport->request()))
+			if($this->transport->request())
 			{
+				$this->transport->read($this->request);
+				if(empty($this->request))
+				{
+					if($this->shutdown)
+					{
+						return TRUE;
+					}
+					continue;
+				}
+
+				$this->http->init($this->reg);
+				$this->http->dissolveRequest($this->request);
+
+				/* http://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3 */
+				if($this->http->continue)
+				{
+					$tmp = '';
+					$response = $this->protocol." 100 Continue\r\n";
+					$this->transport->response($response);
+					if($this->transport->read($tmp))
+					{
+						$this->http->dissolveHeaders($tmp);
+					}
+				}
+
 				if($this->pokeModules('request'))
 				{
 					if(!$this->pokeModules('response'))
@@ -175,6 +201,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 				$this->transport->response($this->response);
 
+				$this->transport->close();
 				$this->pokeModules('cleanup'); // module cleanup
 				$this->cleanup(); // phpd cleanup
 
@@ -268,6 +295,8 @@ class Phpd extends Aplc_Daemon
 
 	public function start()
 	{
+		$http = new Aplc_Http;
+
 		if(!$this->reg->exists('_phpd.transport'))
 		{
 			exit("Unable to determine transport!\n");
@@ -287,6 +316,7 @@ class Phpd extends Aplc_Daemon
 		}
 
 		$this->phpd = new Phpd_Child;
+		$this->phpd->http = $http;
 		/* we want to keep the parent transport intact as we will be changing stuff by reference laters we clone now. */
 		$this->phpd->transport = clone $this->transport;
 		$this->phpd->transport->phpd = $this->phpd;
