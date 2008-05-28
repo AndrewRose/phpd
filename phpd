@@ -54,19 +54,36 @@ class Phpd_Autoloader implements Aplc_Autoloader
 		$file = 'module/' . strtolower(str_replace('_', '', str_replace('Phpd_Module', '', $className))) . '.php';
 		if (file_exists($file))
 		{
-			require_once $file;
+			require_once($file);
 			return;
 		}
 
 		/* check application/ */
 		$file = 'application/' . strtolower(str_replace('Phpd_Application_', '', $className)) . '/entrypoint.php';
-
 		if(file_exists($file))
 		{
-			require_once $file;
+			require_once($file);
+			return;
+		}
+
+		/* check transport/ */
+		$file = 'transport/' . strtolower(str_replace('Phpd_Transport_', '', $className)) . '.php';
+		if(file_exists($file))
+		{
+			require_once($file);
 			return;
 		}
 	}
+}
+
+interface Phpd_Transport
+{
+        public function init(Aplc_Registry $reg);
+        public function request();
+        public function read(&$data);
+        public function response(&$data);
+        public function close();
+        public function deinit();
 }
 
 interface Phpd_Module
@@ -81,7 +98,7 @@ interface Phpd_Module
 class Phpd_Child extends Aplc_Daemon_Child
 {
 	public $server = "phpd/1.0";
-	public $protocol = "HTTP/1.0";
+	public $protocol = "HTTP/1.1";
 	public $transport;
 	public $request;
 	public $response;
@@ -92,6 +109,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 
 	public $status = 200;
 	public $statusCodes = array(
+		100 => 'Continue',
 		200 => 'OK',
 		500 => 'Internal Server Error',
 		501 => 'Not Implemented',
@@ -149,29 +167,18 @@ class Phpd_Child extends Aplc_Daemon_Child
 			if($this->transport->request())
 			{
 				$this->transport->read($this->request);
-				if(empty($this->request))
-				{
-					if($this->shutdown)
-					{
-						return TRUE;
-					}
-					continue;
-				}
+echo $this->request;
 
 				$this->http->init($this->reg);
 				$this->http->dissolveRequest($this->request);
 
-				/* http://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3 */
-				if($this->http->continue)
+				/*if(isset($this->http->headers['Content-Length']) && is_numeric($this->http->headers['Content-Length']))
 				{
-					$tmp = '';
-					$response = $this->protocol." 100 Continue\r\n";
+					$response = $this->protocol." 100 Continue\r\n\r\n";
 					$this->transport->response($response);
-					if($this->transport->read($tmp))
-					{
-						$this->http->dissolveHeaders($tmp);
-					}
-				}
+					$this->transport->read($data, $this->http->headers['Content-Length']);
+echo $data;
+				}*/
 
 				if($this->pokeModules('request'))
 				{
@@ -202,6 +209,7 @@ class Phpd_Child extends Aplc_Daemon_Child
 				$this->transport->response($this->response);
 
 				$this->transport->close();
+
 				$this->pokeModules('cleanup'); // module cleanup
 				$this->cleanup(); // phpd cleanup
 
@@ -303,7 +311,7 @@ class Phpd extends Aplc_Daemon
 		}
 		else
 		{
-			$class = 'Aplc_Transport_'.$this->reg->get('_phpd.transport');
+			$class = 'Phpd_Transport_'.$this->reg->get('_phpd.transport');
 			$this->transport = new $class;
 			$this->transport->log = $this->log;
 		}
